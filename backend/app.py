@@ -58,6 +58,7 @@ EXCEL_FILE = os.environ.get('ATTENDANCE_EXPORT_FILE') or os.path.join(EXPORT_DIR
 ATTENDANCE_SCRIPT = os.path.join(BASE_DIR, 'attendance_runner.py')
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get('PORT', '5000'))
+USE_FIREBASE = os.environ.get('USE_FIREBASE', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 os.makedirs(STUDENT_PHOTO_DIR, exist_ok=True)
 
@@ -221,24 +222,22 @@ def normalize_student_records(records):
 
 
 def load_students_from_firebase():
-    records = firebase_request('students')
-    students = filter_visible_students(normalize_student_records(records))
-    if students:
-        try:
-            write_local_students(students)
-        except Exception:
-            pass
-        return students
+    if not USE_FIREBASE:
+        return []
 
-    local_students = load_local_students()
-    if local_students:
-        try:
-            save_students(local_students)
-        except Exception:
-            pass
-        return local_students
+    try:
+        records = firebase_request('students')
+        students = filter_visible_students(normalize_student_records(records))
+        if students:
+            try:
+                write_local_students(students)
+            except Exception:
+                pass
+            return students
+    except Exception:
+        pass
 
-    return []
+    return load_local_students()
 
 
 def save_students(students):
@@ -254,9 +253,16 @@ def save_students(students):
 
 def load_students():
     try:
+        local_students = load_local_students()
+        if local_students:
+            return local_students
+    except Exception:
+        pass
+
+    try:
         students = load_students_from_firebase()
         if students:
-          return students
+            return students
     except Exception:
         pass
 
@@ -304,8 +310,7 @@ def get_active_excel_file():
 
 
 def create_session_excel_file():
-    timestamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-    return os.path.join(EXPORT_DIR, f"Attendance-{timestamp}.xlsx")
+    return get_active_excel_file() or os.path.join(EXPORT_DIR, 'Attendance.xlsx')
 
 
 def normalize_source(mode, source):
@@ -316,8 +321,36 @@ def normalize_source(mode, source):
     return source.strip()
 
 
+def normalize_status_value(value):
+    return str(value or '').strip().lower()
+
+
 def is_status_value(value):
-    return str(value or '').strip().lower() in {'present', 'absent'}
+    return normalize_status_value(value) in {'present', 'absent'}
+
+
+def is_non_counting_status(value):
+    return normalize_status_value(value) in {'holiday', 'sunday'}
+
+
+def get_class_start_date(profile=None):
+    profile = profile or load_teacher_profile()
+    return str(profile.get('classStartDate', '') or '').strip()
+
+
+def get_day_overrides(profile=None):
+    profile = profile or load_teacher_profile()
+    overrides = profile.get('dayOverrides', {}) or {}
+    if isinstance(overrides, dict):
+        return {str(date_key): str(status_value) for date_key, status_value in overrides.items() if str(date_key).strip()}
+    return {}
+
+
+def filter_records_by_class_start(records, profile=None):
+    start_date = get_class_start_date(profile)
+    if not start_date:
+        return records
+    return [record for record in records if not record.get('date') or record.get('date') >= start_date]
 
 
 def parse_attendance_row(row):
@@ -420,6 +453,90 @@ def read_sheet_records(ws):
             record['day'] = day_hint
         records.append(record)
 
+    return records
+
+
+def persist_day_override(excel_file, day_date, status, students):
+    from openpyxl import Workbook, load_workbook
+
+    try:
+        datetime.strptime(day_date, '%Y-%m-%d')
+    except ValueError:
+        return False
+
+    if os.path.exists(excel_file):
+        workbook = load_workbook(excel_file)
+    else:
+        workbook = Workbook()
+        workbook.remove(workbook.active)
+
+    if day_date in workbook.sheetnames:
+        workbook.remove(workbook[day_date])
+
+    worksheet = workbook.create_sheet(title=day_date)
+    day_name = datetime.strptime(day_date, '%Y-%m-%d').strftime('%A')
+    worksheet['A1'] = f'Attendance - {day_date} ({day_name})'
+    worksheet['A2'] = 'Name'
+    worksheet['B2'] = 'Roll Number'
+    worksheet['C2'] = 'Status'
+    worksheet['D2'] = 'Check-in Time'
+    worksheet['E2'] = 'Date'
+    worksheet['F2'] = 'Day'
+
+    for index, student in enumerate(students, start=3):
+        worksheet[f'A{index}'] = student.get('name', '')
+        worksheet[f'B{index}'] = student.get('rollNumber', '')
+        worksheet[f'C{index}'] = status
+        worksheet[f'D{index}'] = ''
+        worksheet[f'E{index}'] = day_date
+        worksheet[f'F{index}'] = day_name
+
+    workbook.save(excel_file)
+    return True
+
+
+def list_attendance_files():
+    files = []
+    if not os.path.isdir(EXPORT_DIR):
+        return files
+
+    for filename in sorted(os.listdir(EXPORT_DIR)):
+        full_path = os.path.join(EXPORT_DIR, filename)
+        if os.path.isfile(full_path) and filename.lower().endswith('.xlsx'):
+            files.append(full_path)
+
+    return files
+
+
+def collect_attendance_records():
+    records = []
+    seen = set()
+
+    for excel_file in list_attendance_files():
+        if not os.path.exists(excel_file):
+            continue
+
+        try:
+            from openpyxl import load_workbook
+
+            wb = load_workbook(excel_file, data_only=True)
+            for ws in wb.worksheets:
+                for record in read_sheet_records(ws):
+                    key = (
+                        record.get('date', ''),
+                        record.get('name', ''),
+                        record.get('rollNumber', ''),
+                        record.get('checkinTime', ''),
+                        record.get('status', ''),
+                    )
+                    if key not in seen:
+                        seen.add(key)
+                        records.append(record)
+        except Exception:
+            continue
+
+    records = filter_records_by_class_start(records)
+    records.sort(key=lambda item: (item.get('date', ''), item.get('day', ''), item.get('name', '')))
     return records
 
 
@@ -545,13 +662,22 @@ def update_teacher_credentials():
     if not isinstance(data, dict):
         data = {}
 
-    profile = {
-        'email': str(data.get('email', '')).strip().lower(),
-        'password': str(data.get('password', '')).strip(),
-        'name': str(data.get('name', '')).strip(),
-        'className': str(data.get('className', '')).strip(),
-        'section': str(data.get('section', '')).strip(),
-    }
+    profile = load_teacher_profile()
+    profile.update({
+        'email': str(data.get('email', profile.get('email', ''))).strip().lower(),
+        'password': str(data.get('password', profile.get('password', ''))).strip(),
+        'name': str(data.get('name', profile.get('name', ''))).strip(),
+        'className': str(data.get('className', profile.get('className', ''))).strip(),
+        'section': str(data.get('section', profile.get('section', ''))).strip(),
+    })
+
+    if 'classStartDate' in data:
+        profile['classStartDate'] = str(data.get('classStartDate', '') or '').strip()
+
+    if 'dayOverrides' in data:
+        overrides = data.get('dayOverrides', {}) or {}
+        profile['dayOverrides'] = {str(date_key): str(status_value) for date_key, status_value in overrides.items() if str(date_key).strip()}
+
     save_teacher_profile(profile)
     return jsonify(profile)
 
@@ -595,6 +721,8 @@ def start_attendance():
         env = os.environ.copy()
         env['ATTENDANCE_EXPORT_FILE'] = current_excel_file
         env['ATTENDANCE_REPORT_TITLE'] = 'Attenzo Attendance Report'
+        env['ATTENDANCE_SHOW_WINDOW'] = '0'
+        env['ATTENDANCE_USE_LOCAL_FILES'] = '1'
         env['ATTENDANCE_SESSION_ROLLS'] = ','.join(
             [str(student.get('rollNumber', '')).strip() for student in students if student.get('rollNumber')]
         )
@@ -691,20 +819,80 @@ def attendance_status():
     })
 
 
+@app.route('/api/attendance/settings', methods=['GET'])
+def get_attendance_settings():
+    profile = load_teacher_profile()
+    return jsonify({
+        'classStartDate': profile.get('classStartDate', ''),
+        'dayOverrides': get_day_overrides(profile),
+    })
+
+
+@app.route('/api/attendance/settings', methods=['PUT', 'PATCH'])
+def update_attendance_settings():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+
+    profile = load_teacher_profile()
+    if 'classStartDate' in data:
+        profile['classStartDate'] = str(data.get('classStartDate', '') or '').strip()
+
+    if 'dayOverrides' in data:
+        overrides = data.get('dayOverrides', {}) or {}
+        profile['dayOverrides'] = {str(date_key): str(status_value) for date_key, status_value in overrides.items() if str(date_key).strip()}
+
+    save_teacher_profile(profile)
+    return jsonify({
+        'classStartDate': profile.get('classStartDate', ''),
+        'dayOverrides': get_day_overrides(profile),
+    })
+
+
+@app.route('/api/attendance/mark-day', methods=['POST'])
+def mark_attendance_day():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        data = {}
+
+    day_date = str(data.get('date', '') or '').strip()
+    status = str(data.get('status', 'Holiday') or '').strip()
+    if not day_date:
+        return jsonify({'error': 'A date is required'}), 400
+
+    if status not in {'Holiday', 'Sunday'}:
+        return jsonify({'error': 'Status must be Holiday or Sunday'}), 400
+
+    try:
+        datetime.strptime(day_date, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'error': 'Use a YYYY-MM-DD date format'}), 400
+
+    students = load_students()
+    if not students:
+        return jsonify({'error': 'No students found'}), 400
+
+    excel_file = get_active_excel_file() or create_session_excel_file()
+    if not persist_day_override(excel_file, day_date, status, students):
+        return jsonify({'error': 'Unable to save the day override'}), 400
+
+    profile = load_teacher_profile()
+    overrides = get_day_overrides(profile)
+    overrides[day_date] = status
+    profile['dayOverrides'] = overrides
+    save_teacher_profile(profile)
+
+    return jsonify({
+        'success': True,
+        'message': f'{status} marked for {day_date}',
+        'date': day_date,
+        'status': status,
+    })
+
+
 @app.route('/api/reports')
 def get_reports():
-    records = []
-    excel_file = get_active_excel_file()
-    if os.path.exists(excel_file):
-        try:
-            from openpyxl import load_workbook
-
-            wb = load_workbook(excel_file)
-            for ws in wb.worksheets:
-                records.extend(read_sheet_records(ws))
-        except Exception:
-            pass
-    return jsonify(records)
+    return jsonify(collect_attendance_records())
 
 
 @app.route('/api/reports/excel')
@@ -719,22 +907,12 @@ def download_excel():
 def get_dashboard_stats():
     total_students = len(load_students())
     today_attendance = 0
-    excel_file = get_active_excel_file()
-    sheet_name = get_today_sheet_name()
+    all_records = collect_attendance_records()
+    today_key = get_today_sheet_name()
 
-    if os.path.exists(excel_file):
-        try:
-            from openpyxl import load_workbook
-
-            wb = load_workbook(excel_file)
-            if sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                for row in ws.iter_rows(min_row=3, values_only=True):
-                    record = parse_attendance_row(row)
-                    if record and record.get('status') == 'Present':
-                        today_attendance += 1
-        except Exception:
-            pass
+    for record in all_records:
+        if record.get('date') == today_key and normalize_status_value(record.get('status')) == 'present':
+            today_attendance += 1
 
     return jsonify({
         'totalStudents': total_students,

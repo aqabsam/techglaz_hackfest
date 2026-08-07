@@ -17,6 +17,11 @@ export interface AttendanceRecord {
   day: string;
 }
 
+export interface AttendanceSettings {
+  classStartDate: string;
+  dayOverrides: Record<string, string>;
+}
+
 export interface DashboardStats {
   totalStudents: number;
   activeCameras: number;

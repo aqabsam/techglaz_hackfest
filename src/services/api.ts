@@ -1,4 +1,4 @@
-import type { Student, AttendanceRecord, DashboardStats, CameraConfig } from '../types';
+import type { Student, AttendanceRecord, DashboardStats, CameraConfig, AttendanceSettings } from '../types';
 import { API_BASE, withApiOrigin } from '../lib/apiBase';
 
 type ApiErrorPayload = {
@@ -101,6 +101,26 @@ export async function getAttendanceStatus(): Promise<{ running: boolean; present
 // Reports API
 export async function getAttendanceRecords(): Promise<AttendanceRecord[]> {
   return requestJson<AttendanceRecord[]>('/reports');
+}
+
+export async function getAttendanceSettings(): Promise<AttendanceSettings> {
+  return requestJson<AttendanceSettings>('/attendance/settings');
+}
+
+export async function updateAttendanceSettings(settings: AttendanceSettings): Promise<AttendanceSettings> {
+  return requestJson<AttendanceSettings>('/attendance/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+}
+
+export async function markAttendanceDay(date: string, status: 'Holiday' | 'Sunday'): Promise<{ success: boolean; message: string }> {
+  return requestJson<{ success: boolean; message: string }>('/attendance/mark-day', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date, status }),
+  });
 }
 
 export function getAttendanceExcelUrl(): string {

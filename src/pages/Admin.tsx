@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Save, Plus, Trash2, Settings2, CircleCheckBig, Camera, Activity, Radio, Zap, MonitorPlay } from 'lucide-react';
-import type { CameraConfig } from '../types';
+import { useEffect, useState } from 'react';
+import { Save, Plus, Trash2, Settings2, CircleCheckBig, Camera, Activity, Radio, Zap, MonitorPlay, CalendarDays } from 'lucide-react';
+import type { CameraConfig, AttendanceSettings } from '../types';
+import { getAttendanceSettings, markAttendanceDay, updateAttendanceSettings } from '../services/api';
 
 export default function Admin() {
   const [cameras, setCameras] = useState<CameraConfig[]>([
@@ -11,6 +12,23 @@ export default function Admin() {
 
   const [newCamera, setNewCamera] = useState({ name: '', ipAddress: '', type: 'ip_camera' as CameraConfig['type'] });
   const [showAddForm, setShowAddForm] = useState(false);
+  const [attendanceSettings, setAttendanceSettings] = useState<AttendanceSettings>({ classStartDate: '', dayOverrides: {} });
+  const [dayInput, setDayInput] = useState('');
+  const [dayType, setDayType] = useState<'Holiday' | 'Sunday'>('Holiday');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await getAttendanceSettings();
+        setAttendanceSettings(settings);
+      } catch {
+      }
+    };
+
+    loadSettings();
+  }, []);
 
   const handleAddCamera = () => {
     if (!newCamera.name || !newCamera.ipAddress) return;
@@ -30,6 +48,35 @@ export default function Admin() {
     setCameras(cameras.filter((c) => c.id !== id));
   };
 
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const updated = await updateAttendanceSettings(attendanceSettings);
+      setAttendanceSettings(updated);
+      setMessage('Attendance settings saved.');
+    } catch {
+      setMessage('Unable to save attendance settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMarkDay = async () => {
+    if (!dayInput) return;
+    try {
+      const result = await markAttendanceDay(dayInput, dayType);
+      setMessage(result.message);
+      setAttendanceSettings((current) => ({
+        ...current,
+        dayOverrides: { ...current.dayOverrides, [dayInput]: dayType },
+      }));
+      setDayInput('');
+    } catch {
+      setMessage('Unable to mark that day.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
@@ -41,13 +88,17 @@ export default function Admin() {
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">System settings</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Manage camera sources, auto-start behavior, and attendance system configuration from one clean control panel.
+              Manage camera sources and attendance settings from one simple control panel.
             </p>
           </div>
 
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:brightness-105 sm:w-auto">
+          <button
+            onClick={handleSaveSettings}
+            disabled={saving}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
             <Save className="h-5 w-5" />
-            Save Changes
+            {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
 
@@ -89,7 +140,7 @@ export default function Admin() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-white">Camera configuration</h2>
-                  <p className="text-sm text-slate-300">Manage connected cameras and sources</p>
+                  <p className="text-sm text-slate-300">Manage connected camera sources</p>
                 </div>
               </div>
 
@@ -185,45 +236,78 @@ export default function Admin() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">System settings</h2>
-                <p className="text-sm text-slate-300">Quick toggles for teacher workflow</p>
+                <p className="text-sm text-slate-300">Common attendance settings</p>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div>
-                  <p className="text-sm font-medium text-white">Auto-start on login</p>
-                  <p className="text-xs text-slate-300">Begin attendance on system start</p>
-                </div>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input type="checkbox" className="peer sr-only" defaultChecked />
-                  <div className="peer h-6 w-11 rounded-full bg-slate-200 after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-cyan-600 peer-checked:after:translate-x-full" />
-                </label>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div>
-                  <p className="text-sm font-medium text-white">Email notifications</p>
-                  <p className="text-xs text-slate-300">Get alerts for absences</p>
-                </div>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input type="checkbox" className="peer sr-only" />
-                  <div className="peer h-6 w-11 rounded-full bg-slate-200 after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-cyan-600 peer-checked:after:translate-x-full" />
-                </label>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <label className="mb-2 block text-sm font-medium text-white">Class start date</label>
+                <input
+                  type="date"
+                  value={attendanceSettings.classStartDate}
+                  onChange={(e) => setAttendanceSettings({ ...attendanceSettings, classStartDate: e.target.value })}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                />
+                <p className="mt-2 text-xs text-slate-300">Attendance will only count from this date onward.</p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="mb-2 text-sm font-medium text-white">Confidence threshold</p>
-                <input type="range" min="0.3" max="0.7" step="0.05" defaultValue="0.5" className="w-full accent-cyan-600" />
-                <p className="mt-2 text-xs text-slate-300">Current: 0.5 (default)</p>
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-cyan-300" />
+                  <p className="text-sm font-medium text-white">Mark a holiday or Sunday</p>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_0.7fr_auto]">
+                  <input
+                    type="date"
+                    value={dayInput}
+                    onChange={(e) => setDayInput(e.target.value)}
+                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                  />
+                  <select
+                    value={dayType}
+                    onChange={(e) => setDayType(e.target.value as 'Holiday' | 'Sunday')}
+                    className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                  >
+                    <option value="Holiday">Holiday</option>
+                    <option value="Sunday">Sunday</option>
+                  </select>
+                  <button
+                    onClick={handleMarkDay}
+                    className="rounded-2xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cyan-700"
+                  >
+                    Mark
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-300">These days are saved as non-attendance days and do not change attendance percentages.</p>
               </div>
+
+              {message ? (
+                <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+                  {message}
+                </div>
+              ) : null}
+
+              {Object.keys(attendanceSettings.dayOverrides).length ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm font-medium text-white">Saved non-attendance days</p>
+                  <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                    {Object.entries(attendanceSettings.dayOverrides).map(([date, status]) => (
+                      <li key={date} className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                        <span>{date}</span>
+                        <span className="text-cyan-200">{status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           </div>
 
           <div className="rounded-[2rem] border border-white/10 bg-slate-950/55 p-4 text-white shadow-2xl shadow-slate-900/20 backdrop-blur-xl sm:p-6">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Quick note</p>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Use this workspace to keep camera sources organized, verify attendance flow readiness, and manage the core classroom setup from one place.
+              Use this workspace to keep camera sources organized and confirm the attendance setup is ready.
             </p>
             <div className="mt-4 rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-3 text-sm text-cyan-100">
               Recommended: keep at least one active source ready before starting a session.

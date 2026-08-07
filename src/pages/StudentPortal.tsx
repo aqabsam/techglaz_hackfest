@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, CircleUserRound, LogOut, Search, ShieldCheck } from 'lucide-react';
 import { fetchRealtimeStudents } from '../services/realtimeDb';
-import { getAttendanceRecords } from '../services/api';
+import { getAttendanceRecords, getAttendanceSettings } from '../services/api';
 import { filterVisibleAttendanceRecords, filterVisibleStudents } from '../lib/sitePrivacy';
 import type { AttendanceRecord, Student } from '../types';
 
@@ -49,16 +49,19 @@ export default function StudentPortal() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<StudentSession | null>(loadSession());
+  const [classStartDate, setClassStartDate] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [studentList, attendance] = await Promise.all([
+        const [studentList, attendance, settings] = await Promise.all([
           fetchRealtimeStudents().catch(() => []),
           getAttendanceRecords(),
+          getAttendanceSettings().catch(() => ({ classStartDate: '', dayOverrides: {} })),
         ]);
         setStudents(filterVisibleStudents(studentList));
         setRecords(filterVisibleAttendanceRecords(attendance));
+        setClassStartDate(settings.classStartDate || '');
       } catch {
         setError('Unable to load portal data right now.');
       }
@@ -82,9 +85,17 @@ export default function StudentPortal() {
     });
   }, [records, session]);
 
-  const presentCount = studentRecords.filter((record) => record.status === 'Present').length;
-  const totalCount = studentRecords.length;
+  const activeRecords = useMemo(() => {
+    if (!classStartDate) return studentRecords;
+    return studentRecords.filter((record) => !record.date || record.date >= classStartDate);
+  }, [classStartDate, studentRecords]);
+
+  const presentCount = activeRecords.filter((record) => record.status === 'Present').length;
+  const totalCount = activeRecords.filter((record) => record.status !== 'Holiday' && record.status !== 'Sunday').length;
   const attendancePercent = totalCount ? Math.round((presentCount / totalCount) * 100) : 0;
+  const classDays = new Set(activeRecords.map((record) => record.date).filter(Boolean)).size;
+  const sortedDates = activeRecords.map((record) => record.date).filter(Boolean).sort();
+  const classStartedFrom = classStartDate || sortedDates[0] || '—';
   const today = new Date().toISOString().slice(0, 10);
   const todayRecord = studentRecords.find((record) => record.date === today);
 
@@ -134,7 +145,7 @@ export default function StudentPortal() {
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">Student portal</p>
             <h1 className="mt-1 text-2xl font-semibold text-white">Check your attendance</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Use the same name and roll number that your teacher saved in the TechGlaz Fest roster to view your attendance.
+              Use the same name and roll number saved by your teacher to view your attendance record.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -172,7 +183,7 @@ export default function StudentPortal() {
 
               <form onSubmit={handleLogin} className="mt-6 space-y-4">
                 <div className="rounded-2xl border border-cyan-300/15 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-50">
-                  Your name and roll number must exactly match the student data added by the teacher.
+                  Enter the name and roll number exactly as saved by your teacher.
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-200">Student Name</label>
@@ -217,16 +228,16 @@ export default function StudentPortal() {
 
             <div className="rounded-[2rem] border border-white/10 bg-slate-950/75 p-4 text-white shadow-2xl shadow-slate-900/20 backdrop-blur-2xl sm:p-8">
               <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">What you can see</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight">Personal attendance summary</h2>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight">Your attendance summary</h2>
               <div className="mt-6 space-y-4 text-sm text-slate-300">
                 <div className="rounded-3xl border border-emerald-400/10 bg-emerald-500/10 p-4">
-                  Your total attendance percentage
+                  Your attendance percentage
                 </div>
                 <div className="rounded-3xl border border-rose-400/10 bg-rose-500/10 p-4">
-                  Today’s present/absent status
+                  Your status for today
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                  A simple list of your attendance records
+                  A record of your recent attendance
                 </div>
               </div>
             </div>
@@ -252,8 +263,12 @@ export default function StudentPortal() {
                 <p className="mt-2 text-lg font-semibold text-emerald-300">{attendancePercent}%</p>
               </div>
               <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-4 backdrop-blur-2xl">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Today</p>
-                <p className="mt-2 text-lg font-semibold text-white">{todayRecord?.status || 'No record'}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Classes</p>
+                <p className="mt-2 text-lg font-semibold text-white">{classDays}</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-4 backdrop-blur-2xl">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Started</p>
+                <p className="mt-2 text-lg font-semibold text-white">{classStartedFrom}</p>
               </div>
             </div>
 
@@ -276,8 +291,8 @@ export default function StudentPortal() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {studentRecords.length ? (
-                        studentRecords.map((record, index) => (
+                      {activeRecords.length ? (
+                        activeRecords.map((record, index) => (
                           <tr key={`${record.date}-${index}`} className="hover:bg-white/5">
                             <td className="px-3 py-3 text-sm text-slate-200 sm:px-6 sm:py-4">{record.date}</td>
                             <td className="px-3 py-3 text-sm text-slate-200 sm:px-6 sm:py-4">{record.checkinTime}</td>
@@ -317,7 +332,7 @@ export default function StudentPortal() {
                     <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Today</p>
                     <p className="mt-2 text-2xl font-semibold">{todayRecord?.status || 'Not marked yet'}</p>
                     <p className="mt-1 text-sm text-slate-400">
-                      {todayRecord?.checkinTime ? `Check-in at ${todayRecord.checkinTime}` : 'Waiting for attendance'}
+                      {todayRecord?.checkinTime ? `Check-in at ${todayRecord.checkinTime}` : todayRecord?.status === 'Holiday' || todayRecord?.status === 'Sunday' ? 'Marked as non-attendance day' : 'Waiting for attendance'}
                     </p>
                   </div>
                 </div>
