@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, EyeOff, Fingerprint, FileText, Lock, Mail, ShieldCheck, Sparkles, UserCheck, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { allowedLoginEmail } from '../lib/firebase';
+import { fetchTeacherCredentials } from '../services/realtimeDb';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -14,7 +14,7 @@ export default function Login() {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState(allowedLoginEmail);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -30,6 +30,27 @@ export default function Login() {
       navigate(from, { replace: true });
     }
   }, [from, navigate, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSavedTeacherEmail = async () => {
+      try {
+        const credentials = await fetchTeacherCredentials();
+        if (!cancelled && credentials?.email) {
+          setEmail(credentials.email);
+        }
+      } catch {
+        // Keep the form usable even if Firebase is temporarily unavailable.
+      }
+    };
+
+    loadSavedTeacherEmail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,8 +192,8 @@ export default function Login() {
                 {mode === 'signin' ? 'Welcome back' : 'Register teacher account'}
               </h2>
               <p className="mt-2 text-sm text-slate-300">
-                Only <span className="font-semibold text-white">{allowedLoginEmail}</span> can enter the app.
-                    Your teacher profile is used to manage the TechGlaz Fest roster and attendance exports.
+                Sign in with the teacher credentials saved in Firebase Realtime Database.
+                If you are setting it up for the first time, use Register to create the teacher profile.
               </p>
             </div>
 
@@ -202,7 +223,7 @@ export default function Login() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder={allowedLoginEmail}
+                      placeholder="teacher@email.com"
                       className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-11 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
                       required
                     />

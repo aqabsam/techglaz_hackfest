@@ -29,10 +29,6 @@ type AuthUser = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function ensureAllowed(email: string) {
-  return email.trim().toLowerCase() === allowedLoginEmail;
-}
-
 function writeLocalSession(email: string) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(LOCAL_SESSION_KEY, email);
@@ -70,11 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authReady,
       signIn: async (email, password) => {
         const normalizedEmail = email.trim().toLowerCase();
-        if (!ensureAllowed(normalizedEmail)) {
-          throw new Error(`Only ${allowedLoginEmail} can access this app.`);
-        }
 
         const databaseCredential = await fetchTeacherCredentials();
+
         if (
           databaseCredential?.email?.trim().toLowerCase() === normalizedEmail &&
           databaseCredential.password === password
@@ -90,19 +84,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (normalizedEmail === allowedLoginEmail && password === allowedLoginPassword) {
+        if (!databaseCredential && normalizedEmail && password) {
+          const bootstrapEmail = normalizedEmail || allowedLoginEmail;
+          const bootstrapPassword = password || allowedLoginPassword;
+
           await saveTeacherCredentials({
-            email: normalizedEmail,
-            password,
+            email: bootstrapEmail,
+            password: bootstrapPassword,
             name: 'Teacher',
             className: '',
             section: '',
           });
 
-          writeLocalSession(normalizedEmail);
+          writeLocalSession(bootstrapEmail);
           setUser({
-            uid: normalizedEmail,
-            email: normalizedEmail,
+            uid: bootstrapEmail,
+            email: bootstrapEmail,
             displayName: 'Teacher',
             className: '',
             section: '',
@@ -110,23 +107,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        throw new Error('Teacher credentials were not found. Check your sign-in details.');
+        throw new Error('Firebase login details were not found. Check the saved teacher credentials in Realtime Database.');
       },
       signUp: async (name, email, password) => {
-        if (!ensureAllowed(email)) {
-          throw new Error(`Account created, but only ${allowedLoginEmail} is allowed to use the app.`);
+        const normalizedEmail = email.trim().toLowerCase();
+
+        if (!normalizedEmail || !password) {
+          throw new Error('Please provide an email and password.');
         }
 
         await saveTeacherCredentials({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           name,
           password,
         });
 
-        writeLocalSession(email.trim().toLowerCase());
+        writeLocalSession(normalizedEmail);
         setUser({
-          uid: email.trim().toLowerCase(),
-          email: email.trim().toLowerCase(),
+          uid: normalizedEmail,
+          email: normalizedEmail,
           displayName: name || 'Teacher',
           className: '',
           section: '',
