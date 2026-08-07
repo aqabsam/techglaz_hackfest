@@ -7,7 +7,6 @@ import {
   Camera,
   CheckCircle2,
   FileSpreadsheet,
-  Fingerprint,
   Menu,
   Shield,
   Sparkles,
@@ -19,9 +18,9 @@ import {
 
 const featureCards = [
   {
-    icon: Fingerprint,
-    title: 'Attendance matching',
-    description: 'Student roster records help recognition run during each classroom session.',
+    icon: Camera,
+    title: 'Smart attendance',
+    description: 'Use AI-assisted recognition to mark attendance from CCTV, phone camera, or webcam feeds.',
   },
   {
     icon: Shield,
@@ -30,23 +29,23 @@ const featureCards = [
   },
   {
     icon: Camera,
-    title: 'Webcam and CCTV',
-    description: 'Use local webcam, phone IP camera, or RTSP CCTV streams from the same dashboard.',
+    title: 'CCTV and mobile camera',
+    description: 'Connect a CCTV stream, a phone device camera, or a laptop webcam from one dashboard.',
   },
   {
     icon: Users,
     title: 'Student profiles',
-    description: 'Store name, roll number, phone number, and attendance-ready roster details.',
+    description: 'Store name, roll number, phone number, and photo details for attendance matching.',
   },
   {
     icon: FileSpreadsheet,
     title: 'Excel export',
-    description: 'Stop attendance and download the live report as a formatted Excel file instantly.',
+    description: 'Stop attendance and download the daily report as a formatted Excel file instantly.',
   },
   {
     icon: Sparkles,
     title: 'Modern workflow',
-    description: 'Clean pages, polished output screens, and a smooth attendance flow for every classroom.',
+    description: 'A clean classroom workflow that keeps attendance fast, simple, and organized.',
   },
 ];
 
@@ -54,12 +53,12 @@ const steps = [
   {
     step: '01',
     title: 'Create roster',
-    description: 'Add each student once with name, roll number, and phone number.',
+    description: 'Add each student once with name, roll number, phone number, and photo.',
   },
   {
     step: '02',
     title: 'Start camera',
-    description: 'Choose webcam, IP webcam, or CCTV RTSP and start live face detection.',
+    description: 'Choose webcam, phone camera, or CCTV RTSP and start live face detection.',
   },
   {
     step: '03',
@@ -71,7 +70,7 @@ const steps = [
 const portalCards = [
   {
     title: 'Teacher Portal',
-    description: 'Teacher login, student registration, live dashboard, analytics, and attendance tools.',
+    description: 'Mark attendance from phone camera, webcam, or CCTV and manage the full classroom dashboard.',
     href: '/login',
     icon: UserCheck,
     accent: 'from-slate-950/85 via-cyan-950/55 to-indigo-950/55',
@@ -125,11 +124,11 @@ export default function Landing() {
         <div className="mx-auto flex min-h-16 max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 shadow-lg shadow-cyan-500/20">
-              <Fingerprint className="h-5 w-5 text-white" />
+              <Camera className="h-5 w-5 text-white" />
             </div>
             <div>
               <p className="text-sm font-semibold tracking-wide text-white">TechGlaz Fest</p>
-              <p className="text-[11px] text-slate-300">Attendance for classrooms</p>
+              <p className="text-[11px] text-slate-300">Smart attendance for classrooms</p>
             </div>
           </div>
 
@@ -234,22 +233,21 @@ export default function Landing() {
         <section className="px-3 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-6 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div className="space-y-6 sm:space-y-8">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-white/10 px-4 py-2 text-sm text-cyan-100 backdrop-blur-xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-white/10 px-4 py-2 text-sm text-cyan-100 backdrop-blur-xl">
                 <BadgeCheck className="h-4 w-4" />
-                Live attendance made modern
+                Smart attendance made simple
               </div>
 
               <div className="space-y-4 sm:space-y-5">
                 <h1 className="max-w-3xl text-3xl font-semibold leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-7xl">
-                  TechGlaz Fest for
+                  Smart attendance system using
                   <span className="block bg-gradient-to-r from-cyan-300 via-sky-200 to-blue-300 bg-clip-text text-transparent">
-                    modern attendance management
+                    CCTV camera
                   </span>
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
-                  Track students with webcam or CCTV recognition, manage student records, and export clean Excel attendance reports from one focused platform.
+                  Teachers can mark attendance from a phone device camera, webcam, or CCTV feed and export the daily report from one clear platform.
                 </p>
-              </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
                 <Link
@@ -267,9 +265,9 @@ export default function Landing() {
                 </a>
               </div>
 
-              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-                {[
-                  ['TechGlaz Fest profile', 'Teacher login'],
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+                  {[
+                  ['Teacher dashboard', 'Mark attendance'],
                   ['Realtime roster', 'Live attendance'],
                   ['Excel export', 'One-click report'],
                 ].map(([title, subtitle]) => (
@@ -280,8 +278,9 @@ export default function Landing() {
                 ))}
               </div>
             </div>
+          </div>
 
-            <div className="relative w-full min-w-0">
+          <div className="relative w-full min-w-0">
               <div className="absolute -left-6 top-10 h-24 w-24 rounded-full bg-cyan-400/30 blur-2xl" />
               <div className="absolute -right-8 bottom-12 h-28 w-28 rounded-full bg-blue-400/20 blur-2xl" />
               <div className="relative rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_120px_-35px_rgba(14,165,233,0.5)] backdrop-blur-2xl sm:p-5">
@@ -302,17 +301,17 @@ export default function Landing() {
                         <CheckCircle2 className="h-4 w-4 text-emerald-300" />
                         <p className="text-sm font-medium text-white">Present students</p>
                       </div>
-                      <p className="mt-3 text-3xl font-semibold text-cyan-200">24</p>
-                  <p className="mt-1 text-sm text-slate-400">Recognized from your student roster</p>
+                      <p className="mt-3 text-3xl font-semibold text-cyan-200">6</p>
+                      <p className="mt-1 text-sm text-slate-400">Recognized from your student roster</p>
                     </div>
 
                     <div className="rounded-3xl bg-white/5 p-4 ring-1 ring-white/10">
                       <div className="flex items-center gap-2">
                         <Sparkles className="h-4 w-4 text-cyan-300" />
-                        <p className="text-sm font-medium text-white">CCTV stream</p>
+                        <p className="text-sm font-medium text-white">Camera source</p>
                       </div>
                       <p className="mt-3 text-3xl font-semibold text-cyan-200">Live</p>
-                      <p className="mt-1 text-sm text-slate-400">Webcam, IP, and CCTV supported</p>
+                      <p className="mt-1 text-sm text-slate-400">Webcam, phone camera, and CCTV supported</p>
                     </div>
                   </div>
 
@@ -333,10 +332,10 @@ export default function Landing() {
             <div className="mb-6 max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Choose a portal</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Start with the right screen for the right person
+                Select the right workspace
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Teacher portal for registration and roster control. Student portal for exact name-and-roll login and attendance history.
+                Teachers manage attendance and student records, while students view their own attendance information.
               </p>
             </div>
 
@@ -369,7 +368,7 @@ export default function Landing() {
             <div className="mb-10 max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Features</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Built to feel fast, clear, and classroom-ready
+                Built for reliable CCTV attendance
               </h2>
             </div>
 
@@ -386,7 +385,7 @@ export default function Landing() {
             <div className="mb-10 max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">How it works</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Three simple steps from setup to Excel export
+                A simple workflow from setup to export
               </h2>
             </div>
 
@@ -413,10 +412,10 @@ export default function Landing() {
               <div className="max-w-2xl">
                 <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-100">Ready to begin</p>
                 <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  Open the attendance dashboard and start your first session
+                  Open the dashboard and start your first session
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-slate-200">
-                  Teacher login gives you access to the full attendance workspace with live camera sessions, student records, and reports.
+                  Sign in to access the attendance workspace, student records, and reporting tools.
                 </p>
               </div>
 
@@ -437,15 +436,15 @@ export default function Landing() {
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600">
-                  <Fingerprint className="h-5 w-5 text-white" />
+                  <Camera className="h-5 w-5 text-white" />
                 </div>
               <div>
                 <p className="font-semibold text-white">TechGlaz Fest</p>
-                <p className="text-sm text-slate-400">Modern CCTV attendance system</p>
+                <p className="text-sm text-slate-400">Smart CCTV attendance system</p>
               </div>
             </div>
             <p className="max-w-md text-sm leading-6 text-slate-300">
-              TechGlaz Fest keeps teacher sign-in, student management, and live attendance tools in one polished dashboard built for phones and desktops.
+              TechGlaz Fest brings smart attendance, student records, and reporting into one simple dashboard for classrooms.
             </p>
           </div>
 
@@ -474,13 +473,13 @@ export default function Landing() {
             <div className="mt-4 space-y-3 text-sm text-slate-300">
               <p>Teacher login: classroom workspace access</p>
               <p>Attendance export: Excel report on stop</p>
-              <p>Camera modes: Webcam, IP camera, CCTV</p>
+              <p>Camera modes: Webcam, phone camera, CCTV</p>
             </div>
           </div>
         </div>
 
         <div className="mx-auto mt-8 flex max-w-7xl flex-col gap-4 border-t border-white/10 pt-6 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-          <p>&copy; 2026 TechGlaz Fest. Built for classroom attendance.</p>
+          <p>&copy; 2026 TechGlaz Fest. Built for smart classroom attendance.</p>
           <div className="flex flex-wrap items-center gap-4">
             <a className="transition hover:text-cyan-200" href="/login">
               Sign in
