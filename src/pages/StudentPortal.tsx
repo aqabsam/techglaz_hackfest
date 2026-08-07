@@ -120,16 +120,16 @@ export default function StudentPortal() {
   };
 
   return (
-    <div className="min-h-screen bg-[#06111e] px-4 py-6 text-white sm:px-6 lg:px-8">
-      <div className="absolute inset-0">
-        <div className="absolute left-[-8rem] top-[-6rem] h-[26rem] w-[26rem] rounded-full bg-cyan-500/25 blur-3xl" />
-        <div className="absolute right-[-8rem] top-[8rem] h-[24rem] w-[24rem] rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute bottom-[-8rem] left-[20%] h-[22rem] w-[22rem] rounded-full bg-emerald-500/15 blur-3xl" />
+    <div className="relative isolate min-h-screen overflow-x-hidden bg-[#06111e] px-3 py-3 text-white sm:px-6 sm:py-6 lg:px-8">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-[-4rem] top-[-4rem] h-[16rem] w-[16rem] rounded-full bg-cyan-500/25 blur-3xl sm:left-[-8rem] sm:top-[-6rem] sm:h-[26rem] sm:w-[26rem]" />
+        <div className="absolute right-[-2rem] top-[8rem] h-[14rem] w-[14rem] rounded-full bg-blue-500/20 blur-3xl sm:right-[-8rem] sm:h-[24rem] sm:w-[24rem]" />
+        <div className="absolute bottom-[-6rem] left-[20%] h-[16rem] w-[16rem] rounded-full bg-emerald-500/15 blur-3xl sm:bottom-[-8rem] sm:h-[22rem] sm:w-[22rem]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(7,17,31,0.2),rgba(7,17,31,0.9))]" />
       </div>
 
       <div className="relative mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-col gap-4 rounded-[1.75rem] border border-white/10 bg-slate-950/55 px-4 py-4 backdrop-blur-2xl sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="mb-4 flex flex-col gap-3 rounded-[1.75rem] border border-white/10 bg-slate-950/55 px-3 py-3 backdrop-blur-2xl sm:mb-6 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">Student portal</p>
             <h1 className="mt-1 text-2xl font-semibold text-white">Check your attendance</h1>
@@ -158,8 +158,8 @@ export default function StudentPortal() {
         </div>
 
         {!session ? (
-          <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-            <div className="rounded-[2rem] border border-white/10 bg-white/10 p-8 shadow-[0_30px_80px_-35px_rgba(14,165,233,0.35)] backdrop-blur-2xl">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr_0.9fr]">
+            <div className="rounded-[2rem] border border-white/10 bg-white/10 p-4 shadow-[0_30px_80px_-35px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-8">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
                   <CircleUserRound className="h-6 w-6 text-cyan-200" />
@@ -215,7 +215,7 @@ export default function StudentPortal() {
               </form>
             </div>
 
-            <div className="rounded-[2rem] border border-white/10 bg-slate-950/75 p-8 text-white shadow-2xl shadow-slate-900/20 backdrop-blur-2xl">
+            <div className="rounded-[2rem] border border-white/10 bg-slate-950/75 p-4 text-white shadow-2xl shadow-slate-900/20 backdrop-blur-2xl sm:p-8">
               <p className="text-xs uppercase tracking-[0.25em] text-cyan-200">What you can see</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight">Personal attendance summary</h2>
               <div className="mt-6 space-y-4 text-sm text-slate-300">
@@ -232,8 +232,8 @@ export default function StudentPortal() {
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-4">
+          <div className="space-y-4 sm:space-y-6">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
               <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-4 backdrop-blur-2xl">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Student</p>
                 <div className="mt-3 flex items-center gap-3">
@@ -257,7 +257,7 @@ export default function StudentPortal() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/10 shadow-xl shadow-slate-900/5 backdrop-blur-2xl">
                 <div className="border-b border-white/10 px-6 py-4">
                   <div className="flex items-center gap-2">
@@ -269,19 +269,19 @@ export default function StudentPortal() {
                   <table className="w-full">
                     <thead className="bg-white/5">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Date</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Time</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Day</th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 sm:px-6 sm:py-4">Date</th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 sm:px-6 sm:py-4">Time</th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 sm:px-6 sm:py-4">Status</th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 sm:px-6 sm:py-4">Day</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {studentRecords.length ? (
                         studentRecords.map((record, index) => (
                           <tr key={`${record.date}-${index}`} className="hover:bg-white/5">
-                            <td className="px-6 py-4 text-sm text-slate-200">{record.date}</td>
-                            <td className="px-6 py-4 text-sm text-slate-200">{record.checkinTime}</td>
-                            <td className="px-6 py-4">
+                            <td className="px-3 py-3 text-sm text-slate-200 sm:px-6 sm:py-4">{record.date}</td>
+                            <td className="px-3 py-3 text-sm text-slate-200 sm:px-6 sm:py-4">{record.checkinTime}</td>
+                            <td className="px-3 py-3 sm:px-6 sm:py-4">
                               <span
                                 className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
                                   record.status === 'Present'
@@ -292,12 +292,12 @@ export default function StudentPortal() {
                                 {record.status}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm text-slate-200">{record.day}</td>
+                            <td className="px-3 py-3 text-sm text-slate-200 sm:px-6 sm:py-4">{record.day}</td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={4} className="px-6 py-14 text-center text-sm text-slate-300">
+                          <td colSpan={4} className="px-3 py-8 text-center text-sm text-slate-300 sm:px-6 sm:py-14">
                             No attendance records found for your login details yet.
                           </td>
                         </tr>
@@ -308,7 +308,7 @@ export default function StudentPortal() {
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-[1.75rem] border border-white/10 bg-white/10 p-5 backdrop-blur-2xl">
+                <div className="rounded-[1.75rem] border border-white/10 bg-white/10 p-4 backdrop-blur-2xl sm:p-5">
                   <div className="flex items-center gap-2">
                     <CalendarDays className="h-5 w-5 text-cyan-200" />
                     <h3 className="text-sm font-semibold text-white">Current status</h3>

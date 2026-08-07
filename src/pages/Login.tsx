@@ -75,16 +75,16 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[#06111e] text-white">
-      <div className="absolute inset-0">
-        <div className="absolute left-[-8rem] top-[-6rem] h-[26rem] w-[26rem] rounded-full bg-cyan-500/25 blur-3xl" />
-        <div className="absolute right-[-8rem] top-[8rem] h-[24rem] w-[24rem] rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute bottom-[-8rem] left-[20%] h-[22rem] w-[22rem] rounded-full bg-emerald-500/15 blur-3xl" />
+    <div className="relative isolate min-h-screen overflow-x-hidden bg-[#06111e] text-white">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-[-4rem] top-[-4rem] h-[16rem] w-[16rem] rounded-full bg-cyan-500/25 blur-3xl sm:left-[-8rem] sm:top-[-6rem] sm:h-[26rem] sm:w-[26rem]" />
+        <div className="absolute right-[-2rem] top-[8rem] h-[14rem] w-[14rem] rounded-full bg-blue-500/20 blur-3xl sm:right-[-8rem] sm:h-[24rem] sm:w-[24rem]" />
+        <div className="absolute bottom-[-6rem] left-[20%] h-[16rem] w-[16rem] rounded-full bg-emerald-500/15 blur-3xl sm:bottom-[-8rem] sm:h-[22rem] sm:w-[22rem]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(7,17,31,0.2),rgba(7,17,31,0.9))]" />
       </div>
 
-      <div className="relative mx-auto min-h-screen max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 rounded-[1.75rem] border border-white/10 bg-slate-950/55 px-4 py-4 backdrop-blur-2xl sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="relative mx-auto min-h-screen max-w-7xl px-3 py-3 sm:px-6 sm:py-6 lg:px-8">
+        <div className="mb-4 flex flex-col gap-3 rounded-[1.75rem] border border-white/10 bg-slate-950/55 px-3 py-3 backdrop-blur-2xl sm:mb-8 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 shadow-lg shadow-cyan-500/20">
               <Fingerprint className="h-5 w-5 text-white" />
@@ -103,9 +103,9 @@ export default function Login() {
           </Link>
         </div>
 
-        <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <section className="flex items-center">
-            <div className="max-w-xl space-y-8">
+        <div className="grid gap-6 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <section className="hidden lg:flex lg:items-center">
+            <div className="max-w-xl space-y-6 sm:space-y-8">
               <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-white/10 px-4 py-2 text-sm text-cyan-100 backdrop-blur-xl">
                 <ShieldCheck className="h-4 w-4" />
                 Secure teacher access
@@ -125,7 +125,7 @@ export default function Login() {
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-3 sm:gap-4 sm:grid-cols-3">
                 <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur-xl">
                   <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10">
                     <UserCheck className="h-5 w-5 text-cyan-200" />
@@ -149,7 +149,7 @@ export default function Login() {
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
                 <div className="rounded-[1.75rem] border border-white/10 bg-white/10 p-5 backdrop-blur-xl">
                   <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">Teacher portal</p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
@@ -167,7 +167,7 @@ export default function Login() {
           </section>
 
           <section className="flex items-center justify-center">
-            <div className="w-full max-w-md rounded-[2rem] border border-white/15 bg-white/10 p-5 shadow-[0_30px_80px_-35px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-8">
+            <div className="w-full max-w-full overflow-hidden rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_80px_-35px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:max-w-md sm:p-8">
               <div className="mb-6 grid grid-cols-2 rounded-2xl bg-white/10 p-1.5">
                 <button
                   onClick={() => setMode('signin')}
