@@ -1,0 +1,42 @@
+[
+  {
+    "id": "691ed2012efc4dcb84f5fc1fd47125aa",
+    "name": "aban sami",
+    "rollNumber": "4",
+    "phoneNumber": "9931299759",
+    "photoFilename": "691ed2012efc4dcb84f5fc1fd47125aa.jpeg",
+    "createdAt": "2026-07-30"
+  },
+  {
+    "id": "fdf8e40e1fc84be9892cf476ec599982",
+    "name": "Md Kounain",
+    "rollNumber": "32",
+    "phoneNumber": "9876543219",
+    "photoFilename": "fdf8e40e1fc84be9892cf476ec599982.jpeg",
+    "createdAt": "2026-07-30"
+  },
+  {
+    "id": "5f9a97a14a7f4a8b9b276c91e44ede0e",
+    "name": "Jafar Khan Suri",
+    "rollNumber": "23",
+    "phoneNumber": "9123456789",
+    "photoFilename": "5f9a97a14a7f4a8b9b276c91e44ede0e.jpeg",
+    "createdAt": "2026-07-30"
+  },
+  {
+    "id": "b26ddca4c87144c7b3cc013ad34fa2a1",
+    "name": "Sameer Khan",
+    "rollNumber": "03",
+    "phoneNumber": "5678943219",
+    "photoFilename": "b26ddca4c87144c7b3cc013ad34fa2a1.jpeg",
+    "createdAt": "2026-07-30"
+  },
+  {
+    "id": "ccf48742d43a49bd84df2e4f9953947a",
+    "name": "Aqab",
+    "rollNumber": "33",
+    "phoneNumber": "4321432189",
+    "photoFilename": "ccf48742d43a49bd84df2e4f9953947a.jpeg",
+    "createdAt": "2026-07-30"
+  }
+]

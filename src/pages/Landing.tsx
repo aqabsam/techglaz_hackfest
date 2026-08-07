@@ -6,7 +6,6 @@ import {
   BadgeCheck,
   Camera,
   CheckCircle2,
-  CloudCog,
   FileSpreadsheet,
   Fingerprint,
   Menu,
@@ -45,9 +44,9 @@ const featureCards = [
     description: 'Stop attendance and download the live report as a formatted Excel file instantly.',
   },
   {
-    icon: CloudCog,
+    icon: Sparkles,
     title: 'Modern workflow',
-    description: 'Clean admin pages, polished output screens, and Firebase-backed roster sync.',
+    description: 'Clean pages, polished output screens, and a smooth attendance flow for every classroom.',
   },
 ];
 
@@ -72,8 +71,7 @@ const steps = [
 const portalCards = [
   {
     title: 'Teacher Portal',
-    description:
-      'Teacher login, student registration, live dashboard, analytics, and Firebase roster management.',
+    description: 'Teacher login, student registration, live dashboard, analytics, and attendance tools.',
     href: '/login',
     icon: UserCheck,
     accent: 'from-slate-950/85 via-cyan-950/55 to-indigo-950/55',
@@ -131,7 +129,7 @@ export default function Landing() {
             </div>
             <div>
               <p className="text-sm font-semibold tracking-wide text-white">TechGlaz Fest</p>
-              <p className="text-[11px] text-slate-300">CCTV attendance for classrooms</p>
+              <p className="text-[11px] text-slate-300">Attendance for classrooms</p>
             </div>
           </div>
 
@@ -418,7 +416,7 @@ export default function Landing() {
                   Open the attendance dashboard and start your first session
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-slate-200">
-                  Teacher login now uses your TechGlaz Fest account, and the rest of the dashboard stays on Firebase for roster data.
+                  Teacher login gives you access to the full attendance workspace with live camera sessions, student records, and reports.
                 </p>
               </div>
 
@@ -436,11 +434,11 @@ export default function Landing() {
 
       <footer className="relative border-t border-white/10 bg-slate-950/75 px-4 py-10 backdrop-blur-2xl sm:px-6 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.25fr_0.75fr_0.75fr]">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600">
-                <Fingerprint className="h-5 w-5 text-white" />
-              </div>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600">
+                  <Fingerprint className="h-5 w-5 text-white" />
+                </div>
               <div>
                 <p className="font-semibold text-white">TechGlaz Fest</p>
                 <p className="text-sm text-slate-400">Modern CCTV attendance system</p>
@@ -474,7 +472,7 @@ export default function Landing() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Support</p>
             <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <p>Teacher login: TechGlaz Fest account</p>
+              <p>Teacher login: classroom workspace access</p>
               <p>Attendance export: Excel report on stop</p>
               <p>Camera modes: Webcam, IP camera, CCTV</p>
             </div>

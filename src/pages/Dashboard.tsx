@@ -33,7 +33,6 @@ export default function Dashboard() {
         });
         setRecentActivity(visibleRecords.slice(-6).reverse());
       } catch {
-        // Keep the dashboard usable even if Firebase is temporarily unavailable.
       }
     };
 
@@ -58,7 +57,7 @@ export default function Dashboard() {
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">Dashboard</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              This dashboard reflects your Firebase roster and any attendance records already stored in Realtime Database.
+              This dashboard reflects your saved roster and the latest attendance activity in one clean view.
             </p>
           </div>
 
@@ -119,9 +118,9 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-white">System Snapshot</h2>
           <div className="mt-4 space-y-4">
             <div className="flex items-center justify-between rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4">
-              <div>
+            <div>
                 <p className="text-sm font-medium text-white">Students ready</p>
-                <p className="text-xs text-slate-300">Loaded from the saved Firebase roster</p>
+                <p className="text-xs text-slate-300">Loaded from your roster data</p>
               </div>
               <span className="text-2xl font-semibold text-emerald-300">{stats.totalStudents}</span>
             </div>
@@ -129,7 +128,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-4">
               <div>
                 <p className="text-sm font-medium text-white">Cameras active</p>
-                <p className="text-xs text-slate-300">No backend camera process in this build</p>
+                <p className="text-xs text-slate-300">Webcam or CCTV sessions in progress</p>
               </div>
               <span className="text-2xl font-semibold text-cyan-300">{stats.activeCameras}</span>
             </div>
