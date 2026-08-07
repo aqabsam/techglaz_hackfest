@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const localSessionEmail =
       typeof window !== 'undefined' ? window.localStorage.getItem(LOCAL_SESSION_KEY) : null;
 
-    if (localSessionEmail && ensureAllowed(localSessionEmail)) {
+    if (localSessionEmail) {
       return {
         uid: localSessionEmail,
         email: localSessionEmail,
@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        throw new Error('Firebase login details were not found. Check the saved teacher credentials in Realtime Database.');
+        throw new Error('Teacher login details were not found. Check the saved teacher credentials in the backend.');
       },
       signUp: async (name, email, password) => {
         const normalizedEmail = email.trim().toLowerCase();

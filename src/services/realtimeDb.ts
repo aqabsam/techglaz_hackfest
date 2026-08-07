@@ -1,5 +1,5 @@
 import type { Student } from '../types';
-import { firebaseDatabaseUrl } from '../lib/firebase';
+import { API_BASE } from '../lib/apiBase';
 import type { AttendanceRecord } from '../types';
 
 export type TeacherCredentialRecord = {
@@ -11,7 +11,7 @@ export type TeacherCredentialRecord = {
 };
 
 async function readJson<T>(path: string): Promise<T | null> {
-  const response = await fetch(`${firebaseDatabaseUrl}/${path}.json`);
+  const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
     throw new Error(`Teacher data request failed with ${response.status}`);
   }
@@ -40,41 +40,22 @@ function normalizeStudent(student: Partial<Student> & { photoUrl?: string | null
   };
 }
 
-function extractTeacherCredential(record: unknown): TeacherCredentialRecord | null {
-  if (!record || typeof record !== 'object') {
+export async function fetchTeacherCredentials(): Promise<TeacherCredentialRecord | null> {
+  const credentials = await readJson<TeacherCredentialRecord>('/teacher-credentials');
+  if (!credentials || typeof credentials !== 'object') {
     return null;
   }
 
-  const candidate = record as TeacherCredentialRecord & Record<string, unknown>;
-  if (typeof candidate.email === 'string' && typeof candidate.password === 'string') {
-    return {
-      email: candidate.email,
-      password: candidate.password,
-      name: typeof candidate.name === 'string' ? candidate.name : undefined,
-      className: typeof candidate.className === 'string' ? candidate.className : undefined,
-      section: typeof candidate.section === 'string' ? candidate.section : undefined,
-    };
+  const candidate = credentials as TeacherCredentialRecord;
+  if (!candidate.email && !candidate.password && !candidate.name && !candidate.className && !candidate.section) {
+    return null;
   }
 
-  for (const nested of Object.values(candidate)) {
-    if (nested && typeof nested === 'object') {
-      const nestedCredential = extractTeacherCredential(nested);
-      if (nestedCredential) {
-        return nestedCredential;
-      }
-    }
-  }
-
-  return null;
-}
-
-export async function fetchTeacherCredentials(): Promise<TeacherCredentialRecord | null> {
-  const root = await readJson<unknown>('');
-  return extractTeacherCredential(root);
+  return candidate;
 }
 
 export async function saveTeacherCredentials(teacher: TeacherCredentialRecord): Promise<void> {
-  const response = await fetch(`${firebaseDatabaseUrl}/teacherCredentials.json`, {
+  const response = await fetch(`${API_BASE}/teacher-credentials`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(teacher),
@@ -86,17 +67,16 @@ export async function saveTeacherCredentials(teacher: TeacherCredentialRecord): 
 }
 
 export async function fetchRealtimeStudents(): Promise<Student[]> {
-  const records = await readJson<Record<string, Partial<Student> & { photoUrl?: string | null }> | Array<Partial<Student> & { photoUrl?: string | null }>>('students');
+  const records = await readJson<Array<Partial<Student> & { photoUrl?: string | null }>>('/students');
   if (!records) {
     return [];
   }
 
-  const values = Array.isArray(records) ? records : Object.values(records);
-  return values.map(normalizeStudent).filter((student): student is Student => Boolean(student));
+  return records.map(normalizeStudent).filter((student): student is Student => Boolean(student));
 }
 
 export async function saveRealtimeStudent(student: Student): Promise<void> {
-  const response = await fetch(`${firebaseDatabaseUrl}/students/${student.id}.json`, {
+  const response = await fetch(`${API_BASE}/students/${student.id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(student),
@@ -108,7 +88,7 @@ export async function saveRealtimeStudent(student: Student): Promise<void> {
 }
 
 export async function removeRealtimeStudent(id: string): Promise<void> {
-  const response = await fetch(`${firebaseDatabaseUrl}/students/${id}.json`, {
+  const response = await fetch(`${API_BASE}/students/${id}`, {
     method: 'DELETE',
   });
 
@@ -170,7 +150,7 @@ function collectAttendanceRecords(value: unknown, output: AttendanceRecord[], se
 }
 
 export async function fetchAttendanceRecords(): Promise<AttendanceRecord[]> {
-  const root = await readJson<unknown>('');
+  const root = await readJson<unknown>('/reports');
   const records: AttendanceRecord[] = [];
   const seen = new Set<string>();
   collectAttendanceRecords(root, records, seen);

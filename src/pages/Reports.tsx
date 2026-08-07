@@ -1,21 +1,17 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import {
-  BarChart3,
-  CheckCircle2,
-  Download,
   FileText,
-  Search,
+  PieChart,
   Upload,
   Users,
 } from 'lucide-react';
-import { getAttendanceRecords } from '../services/api';
-import { filterVisibleAttendanceRecords } from '../lib/sitePrivacy';
-import type { AttendanceRecord } from '../types';
 
 type AnalyticsRow = {
   name: string;
+  registrationNumber: string;
   rollNumber: string;
   percentage: number;
+  percentageText: string;
   statusLabel: string;
 };
 
@@ -23,7 +19,36 @@ function normalizeKey(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function splitCsvLine(line: string) {
+function detectDelimiter(text: string) {
+  const candidates = [',', ';', '\t', '|'];
+  const sampleLines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
+  let bestDelimiter = ',';
+  let bestScore = -1;
+
+  for (const delimiter of candidates) {
+    let score = 0;
+    for (const line of sampleLines) {
+      const count = line.split(delimiter).length - 1;
+      if (count > 0) {
+        score += count;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestDelimiter = delimiter;
+    }
+  }
+
+  return bestDelimiter;
+}
+
+function splitDelimitedLine(line: string, delimiter: string) {
   const cells: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -43,7 +68,7 @@ function splitCsvLine(line: string) {
       continue;
     }
 
-    if (char === ',' && !inQuotes) {
+    if (char === delimiter && !inQuotes) {
       cells.push(current.trim());
       current = '';
       continue;
@@ -57,151 +82,271 @@ function splitCsvLine(line: string) {
 }
 
 function toNumber(value: string) {
-  const cleaned = value.replace(/%/g, '').trim();
+  const cleaned = value.replace(/,/g, '').replace(/%/g, '').trim();
   const parsed = Number.parseFloat(cleaned);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function looksLikePercentage(value: string) {
+function parsePercentageValue(value: string) {
   const cleaned = value.trim();
-  if (!cleaned) return false;
-  if (/^(present|absent|p|a|yes|no)$/i.test(cleaned)) return false;
-  return /[0-9]/.test(cleaned);
+  if (!cleaned || /^(present|absent|p|a|yes|no|na|n\/a|none)$/i.test(cleaned)) return null;
+
+  const numeric = toNumber(cleaned);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
+
+  if (!cleaned.includes('%') && numeric <= 1) {
+    return Math.round(numeric * 100);
+  }
+
+  return Math.min(100, Math.round(numeric));
+}
+
+function formatPercentageLabel(row: Pick<AnalyticsRow, 'percentage' | 'percentageText'>) {
+  const raw = row.percentageText.trim();
+  if (!raw) {
+    return `${row.percentage.toFixed(0)}%`;
+  }
+
+  if (raw.endsWith('%')) {
+    return raw;
+  }
+
+  return `${raw}%`;
+}
+
+function isHeaderRow(cells: string[], normalizedHeaders: string[]) {
+  const normalizedCells = cells.map(normalizeKey).filter(Boolean);
+  if (!normalizedCells.length) return false;
+
+  const matches = normalizedCells.filter((cell) => normalizedHeaders.includes(cell));
+  return matches.length >= Math.max(2, Math.min(normalizedHeaders.length, 3));
+}
+
+function isAttendanceTableHeader(cells: string[]) {
+  const normalizedCells = cells.map(normalizeKey);
+  const hasName = normalizedCells.some((cell) => cell === 'name' || cell.includes('name'));
+  const hasRoll = normalizedCells.some((cell) => cell === 'rollno' || cell === 'rollnumber' || cell === 'roll');
+  const hasPercent = normalizedCells.some((cell) => cell === 'percent' || cell.includes('percent'));
+  const hasTotal = normalizedCells.some((cell) => cell === 'total' || cell.includes('total'));
+  return hasName && hasRoll && (hasPercent || hasTotal);
+}
+
+function isDataSummaryRow(cells: string[]) {
+  const normalizedFirst = normalizeKey(cells[0] || '');
+  const normalizedName = normalizeKey(cells[3] || '');
+  if (normalizedFirst === '-' || normalizedName === '-') return true;
+  if (/^legends?/.test(normalizedFirst)) return true;
+  if (/^total/.test(normalizedFirst)) return true;
+  return false;
+}
+
+function matchesHeader(rawHeader: string, normalizedHeader: string, keys: string[]) {
+  const normalizedKeys = keys.map(normalizeKey).filter(Boolean);
+  if (normalizedKeys.length === 0) {
+    return keys.some((key) => rawHeader.trim().replace(/"/g, '') === key);
+  }
+
+  return normalizedKeys.some((key) => normalizedHeader === key || normalizedHeader.includes(key));
 }
 
 function parseCsv(text: string): AnalyticsRow[] {
   const lines = text
+    .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
   if (lines.length < 2) return [];
 
-  const headers = splitCsvLine(lines[0]).map(normalizeKey);
+  const delimiter = detectDelimiter(text);
+  const headerLineIndex = lines.findIndex((line) => isAttendanceTableHeader(splitDelimitedLine(line, delimiter)));
+  if (headerLineIndex === -1) return [];
+
+  const rawHeaders = splitDelimitedLine(lines[headerLineIndex], delimiter);
+  const headers = rawHeaders.map(normalizeKey);
 
   const pickIndex = (keys: string[]) =>
-    headers.findIndex((header) => keys.some((key) => header === key || header.includes(key)));
+    headers.findIndex((header, index) => matchesHeader(rawHeaders[index] || '', header, keys));
 
+  const registrationIndex = pickIndex(['regno', 'regnumber', 'registrationnumber', 'registrationno']);
   const nameIndex = pickIndex(['name', 'studentname', 'fullname', 'student']);
   const rollIndex = pickIndex(['rollnumber', 'rollno', 'roll', 'id']);
-  const statusIndex = pickIndex(['status', 'attendance status', 'presentabsent']);
-  const percentageIndex = pickIndex(['attendancepercentage', 'attendance', 'percentage', 'percent', 'score', 'marks']);
-  const presentIndex = pickIndex(['present', 'presentdays', 'attended']);
-  const totalIndex = pickIndex(['total', 'totaldays', 'classes', 'workingdays']);
+  const percentageIndex =
+    pickIndex(['attendancepercentage', 'attendance', 'percentage', 'percent', 'score', 'marks']) !== -1
+      ? pickIndex(['attendancepercentage', 'attendance', 'percentage', 'percent', 'score', 'marks'])
+      : rawHeaders.findIndex((header) => header.trim() === '%');
+  const normalizedHeaders = headers.filter(Boolean);
 
-  const rawRows = lines.slice(1).map((line) => {
-    const cells = splitCsvLine(line);
-    const name = cells[nameIndex] || cells[0] || '';
-    const rollNumber = cells[rollIndex] || cells[1] || '';
-    const status = cells[statusIndex] || '';
-    let percentage = 0;
-    let hasPercentage = false;
+  type StudentAggregate = {
+    name: string;
+    registrationNumber: string;
+    rollNumber: string;
+    percentage: number;
+    percentageText: string;
+  };
 
-    if (percentageIndex !== -1 && cells[percentageIndex] && looksLikePercentage(cells[percentageIndex])) {
-      percentage = toNumber(cells[percentageIndex]);
-      hasPercentage = true;
-    } else if (presentIndex !== -1 && totalIndex !== -1) {
-      const present = toNumber(cells[presentIndex]);
-      const total = toNumber(cells[totalIndex]);
-      percentage = total ? Math.round((present / total) * 100) : 0;
-      hasPercentage = total > 0;
+  const grouped = new Map<string, StudentAggregate>();
+
+  for (const line of lines.slice(headerLineIndex + 1)) {
+    const cells = splitDelimitedLine(line, delimiter);
+    if (isDataSummaryRow(cells)) {
+      continue;
+    }
+    if (isHeaderRow(cells, normalizedHeaders)) {
+      continue;
     }
 
-    return {
-      name,
-      rollNumber,
-      percentage,
-      status,
-      hasPercentage,
-    };
-  }).filter((row) => row.name);
+    const name = (cells[nameIndex] || cells[0] || '').trim();
+    const registrationNumber = (cells[registrationIndex] || '').trim();
+    const rollNumber = (cells[rollIndex] || cells[1] || '').trim();
+    if (!name && !rollNumber) {
+      continue;
+    }
 
-  const grouped = new Map<
-    string,
-    { name: string; rollNumber: string; explicitPercentages: number[]; presentCount: number; totalCount: number }
-  >();
+    const trailingCell = cells[cells.length - 1] || '';
+    const percentageCell = percentageIndex !== -1 ? cells[percentageIndex] || trailingCell : trailingCell;
 
-  for (const row of rawRows) {
-    const key = `${normalizeKey(row.name)}|${normalizeKey(row.rollNumber || row.name)}`;
+    const explicitPercentage = percentageCell ? parsePercentageValue(percentageCell) : null;
+    if (explicitPercentage === null) {
+      continue;
+    }
+
+    const key = normalizeKey(rollNumber || name);
     const current = grouped.get(key) || {
-      name: row.name,
-      rollNumber: row.rollNumber,
-      explicitPercentages: [] as number[],
-      presentCount: 0,
-      totalCount: 0,
+      name,
+      registrationNumber,
+      rollNumber,
+      percentage: explicitPercentage,
+      percentageText: percentageCell,
     };
 
-    current.name = current.name || row.name;
-    current.rollNumber = current.rollNumber || row.rollNumber;
-
-    if (row.hasPercentage && row.percentage > 0) {
-      current.explicitPercentages.push(row.percentage);
-    }
-
-    if (!row.hasPercentage) {
-      current.totalCount += 1;
-      const normalizedStatus = row.status.trim().toLowerCase();
-      if (normalizedStatus === 'present' || normalizedStatus === 'p' || normalizedStatus.includes('present')) {
-        current.presentCount += 1;
-      }
-    }
+    current.name = current.name || name;
+    current.registrationNumber = current.registrationNumber || registrationNumber;
+    current.rollNumber = current.rollNumber || rollNumber;
+    current.percentage = explicitPercentage;
+    current.percentageText = current.percentageText || percentageCell;
 
     grouped.set(key, current);
   }
 
   return Array.from(grouped.values())
-    .map((row) => {
-      const explicitAverage = row.explicitPercentages.length
-        ? Math.round(row.explicitPercentages.reduce((sum, value) => sum + value, 0) / row.explicitPercentages.length)
-        : 0;
-      const percentage = explicitAverage || (row.totalCount ? Math.round((row.presentCount / row.totalCount) * 100) : 0);
-      return {
-        name: row.name,
-        rollNumber: row.rollNumber,
-        percentage,
-        statusLabel: percentage >= 75 ? 'Above threshold' : 'Below threshold',
-      };
-    })
+    .map((row) => ({
+      name: row.name,
+      registrationNumber: row.registrationNumber,
+      rollNumber: row.rollNumber,
+      percentage: row.percentage,
+      percentageText: row.percentageText,
+      statusLabel: 'Unknown',
+    }))
     .sort((left, right) => right.percentage - left.percentage || left.name.localeCompare(right.name));
 }
 
-function BarGraph({ rows }: { rows: AnalyticsRow[] }) {
-  const visibleRows = rows.slice(0, 8);
-  const max = Math.max(100, ...visibleRows.map((row) => row.percentage));
+function PieChartCard({ rows, threshold }: { rows: AnalyticsRow[]; threshold: number }) {
+  const eligibleCount = rows.filter((row) => row.percentage >= threshold).length;
+  const notEligibleCount = rows.length - eligibleCount;
+  const total = rows.length;
+  const eligiblePercent = total ? (eligibleCount / total) * 100 : 0;
+  const notEligiblePercent = total ? (notEligibleCount / total) * 100 : 0;
+  const radius = 56;
+  const circumference = 2 * Math.PI * radius;
+  const eligibleStroke = (eligiblePercent / 100) * circumference;
+  const notEligibleStroke = (notEligiblePercent / 100) * circumference;
 
   return (
-    <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
+    <div className="w-full rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-5 lg:p-6">
       <div className="mb-5 flex items-center gap-2">
-        <BarChart3 className="h-5 w-5 text-cyan-600" />
-        <h3 className="text-lg font-semibold text-white">Attendance bar graph</h3>
+        <PieChart className="h-5 w-5 text-cyan-600" />
+        <h3 className="text-base font-semibold text-white sm:text-lg">Attendance pie chart</h3>
       </div>
 
-      <div className="space-y-4">
-        {visibleRows.length ? (
-          visibleRows.map((row) => {
-            const width = Math.max(6, Math.round((row.percentage / max) * 100));
-            const color = row.percentage >= 75 ? 'bg-emerald-400' : 'bg-rose-400';
-            return (
-              <div key={`${row.rollNumber}-${row.name}`} className="space-y-1.5">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium text-white">{row.name}</span>
-                  <span className={row.percentage >= 75 ? 'text-emerald-300' : 'text-rose-300'}>
-                    {row.percentage.toFixed(0)}%
-                  </span>
-                </div>
-                <div className="h-3 rounded-full bg-slate-100">
-                  <div
-                    className={`h-3 rounded-full ${color}`}
-                    style={{ width: `${width}%` }}
-                  />
-                </div>
+      <div className="grid items-start gap-5 md:gap-6 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] lg:items-center">
+        <div className="mx-auto flex w-full max-w-[220px] items-center justify-center sm:max-w-[260px] md:max-w-[280px] lg:max-w-none">
+          {total ? (
+            <div className="relative w-full max-w-[280px] aspect-square">
+              <svg viewBox="0 0 140 140" className="h-full w-full rotate-[-90deg]">
+                <circle cx="70" cy="70" r={radius} className="fill-none stroke-white/10" strokeWidth="18" />
+                <circle
+                  cx="70"
+                  cy="70"
+                  r={radius}
+                  className="fill-none stroke-emerald-400"
+                  strokeWidth="18"
+                  strokeLinecap="round"
+                  strokeDasharray={`${eligibleStroke} ${circumference - eligibleStroke}`}
+                  strokeDashoffset="0"
+                />
+                <circle
+                  cx="70"
+                  cy="70"
+                  r={radius}
+                  className="fill-none stroke-rose-400"
+                  strokeWidth="18"
+                  strokeLinecap="round"
+                  strokeDasharray={`${notEligibleStroke} ${circumference - notEligibleStroke}`}
+                  strokeDashoffset={-eligibleStroke}
+                />
+              </svg>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-2xl font-bold text-white sm:text-3xl lg:text-4xl">{total}</span>
+                <span className="mt-1 text-[10px] uppercase tracking-[0.22em] text-slate-300 sm:text-[11px]">
+                  Students
+                </span>
               </div>
-            );
-          })
-        ) : (
-          <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
-            Upload a CSV file to render the bar graph.
+            </div>
+          ) : (
+            <p className="w-full rounded-3xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-slate-300">
+              Upload a CSV file to render the pie chart.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid gap-3">
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/15 bg-emerald-500/10 px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Eligible</p>
+                <p className="mt-1 text-base font-medium text-white sm:text-lg">At or above threshold</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-semibold text-emerald-300 sm:text-2xl">
+                  {eligibleCount}{' '}
+                  <span className="text-sm font-medium text-emerald-200 sm:text-base">({eligiblePercent.toFixed(0)}%)</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-rose-400/15 bg-rose-500/10 px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.2em] text-rose-200">Not eligible</p>
+                <p className="mt-1 text-base font-medium text-white sm:text-lg">Below threshold</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-semibold text-rose-300 sm:text-2xl">
+                  {notEligibleCount}{' '}
+                  <span className="text-sm font-medium text-rose-200 sm:text-base">({notEligiblePercent.toFixed(0)}%)</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <span className="w-full rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-center text-xs font-semibold text-emerald-200">
+              Eligible: {threshold}% and above
+            </span>
+            <span className="w-full rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-center text-xs font-semibold text-rose-200">
+              Not eligible: below {threshold}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-2 text-xs text-slate-300 sm:text-sm">
+        {total ? (
+          <p>
+            Pie chart shows the share of students who meet the threshold versus those who do not, using the uploaded CSV percentages.
           </p>
+        ) : (
+          <p>Upload a CSV file to render the pie chart.</p>
         )}
       </div>
     </div>
@@ -209,44 +354,9 @@ function BarGraph({ rows }: { rows: AnalyticsRow[] }) {
 }
 
 export default function Reports() {
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [csvRows, setCsvRows] = useState<AnalyticsRow[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
   const [threshold, setThreshold] = useState(75);
-  const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    const loadRecords = async () => {
-      try {
-        setRecords(filterVisibleAttendanceRecords(await getAttendanceRecords()));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadRecords();
-  }, []);
-
-  const filteredRecords = useMemo(() => {
-    return records.filter((record) => {
-      const matchesFrom = dateFrom ? record.date >= dateFrom : true;
-      const matchesTo = dateTo ? record.date <= dateTo : true;
-      const matchesSearch = search
-        ? record.name.toLowerCase().includes(search.toLowerCase()) ||
-          (record.rollNumber || '').toLowerCase().includes(search.toLowerCase())
-        : true;
-      return matchesFrom && matchesTo && matchesSearch;
-    });
-  }, [dateFrom, dateTo, records, search]);
-
-  const presentCount = filteredRecords.filter((record) => record.status === 'Present').length;
-  const absentCount = filteredRecords.filter((record) => record.status === 'Absent').length;
-  const attendancePercent = filteredRecords.length
-    ? Math.round((presentCount / filteredRecords.length) * 100)
-    : 0;
 
   const eligibleRows = useMemo(
     () => csvRows.filter((row) => row.percentage >= threshold),
@@ -266,30 +376,6 @@ export default function Reports() {
     setCsvFileName(file.name);
   };
 
-  const handleDownloadRecords = () => {
-    if (!filteredRecords.length) return;
-
-    const header = ['Date', 'Day', 'Name', 'Roll Number', 'Check-in Time', 'Status'];
-    const rows = filteredRecords.map((record) => [
-      record.date,
-      record.day,
-      record.name,
-      record.rollNumber || '',
-      record.checkinTime,
-      record.status,
-    ]);
-    const csv = [header, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'attendance-records.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="space-y-6">
       <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
@@ -301,19 +387,9 @@ export default function Reports() {
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">Analytics</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Upload a CSV export to compare attendance against a threshold. The parser now groups raw Present/Absent rows or summary rows, so percentages reflect the actual file content.
+              Upload a CSV export and the analysis will use only the data inside that file. It reads the uploaded student rows, pulls the registration number and percentage, and compares them to the threshold.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={handleDownloadRecords}
-            disabled={!filteredRecords.length}
-            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Download className="h-5 w-5" />
-            Download Records
-          </button>
         </div>
       </div>
 
@@ -324,7 +400,7 @@ export default function Reports() {
             <h2 className="text-lg font-semibold text-white">Upload CSV</h2>
           </div>
           <p className="mt-2 text-sm text-slate-300">
-            Supported columns: name, roll number, status rows, attendance percentage, or present/total counts.
+            Supported columns: `Name` and `%`.
           </p>
 
           <div className="mt-5 rounded-[1.5rem] border-2 border-dashed border-white/15 bg-white/5 p-4 sm:p-5">
@@ -368,135 +444,71 @@ export default function Reports() {
             </div>
           </div>
         </div>
-
         <div className="min-w-0 rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
           <div className="mb-5 flex items-center gap-2">
             <Users className="h-5 w-5 text-cyan-600" />
-            <h3 className="text-lg font-semibold text-white">Threshold list</h3>
+            <h3 className="text-lg font-semibold text-white">Uploaded CSV data</h3>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3 md:hidden">
             {csvRows.length ? (
               csvRows.map((row) => {
-                const isGreen = row.percentage >= threshold;
+                const isEligible = row.percentage >= threshold;
                 return (
                   <div
-                    key={`${row.rollNumber}-${row.name}`}
-                    className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm transition ${
-                      isGreen ? 'border border-emerald-400/15 bg-emerald-500/10 text-white' : 'border border-rose-400/15 bg-rose-500/10 text-white'
-                    }`}
+                    key={`${row.registrationNumber || row.rollNumber}-${row.name}`}
+                    className={`rounded-2xl border p-4 ${isEligible ? 'border-emerald-400/15 bg-emerald-500/10' : 'border-rose-400/15 bg-rose-500/10'}`}
                   >
-                    <div>
-                      <p className="font-semibold">{row.name}</p>
-                      <p className="text-xs opacity-75">{row.rollNumber || 'No roll number'}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{row.percentage.toFixed(0)}%</p>
-                      <p className="text-xs">{isGreen ? 'Above threshold' : 'Below threshold'}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{row.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold ${isEligible ? 'text-emerald-300' : 'text-rose-300'}`}>{row.percentageText || `${row.percentage.toFixed(0)}%`}</p>
+                        <p className="text-[11px] text-slate-300">{isEligible ? 'Eligible' : 'Not eligible'}</p>
+                      </div>
                     </div>
                   </div>
                 );
               })
             ) : (
-              <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
-                Upload a CSV to see the names listed in green and red.
+              <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-slate-300">
+                Upload a CSV to see the imported student data here.
               </p>
             )}
           </div>
-        </div>
-      </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <div className="min-w-0 rounded-[2rem] border border-white/15 bg-white/10 p-6 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl">
-          <div className="mb-4 flex items-center gap-2">
-            <Search className="h-5 w-5 text-slate-400" />
-            <h2 className="text-lg font-semibold text-white">Filter attendance records</h2>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-300">From</span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-300">To</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-              />
-            </div>
-            <div className="sm:col-span-2 xl:col-span-1">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name or roll number"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4 text-white backdrop-blur-xl">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Total Records</p>
-              <p className="mt-2 text-2xl font-semibold">{filteredRecords.length}</p>
-            </div>
-            <div className="rounded-3xl border border-emerald-400/15 bg-emerald-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Present</p>
-              <p className="mt-2 text-2xl font-semibold text-emerald-300">{presentCount}</p>
-            </div>
-            <div className="rounded-3xl border border-rose-400/15 bg-rose-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-rose-200">Absent</p>
-              <p className="mt-2 text-2xl font-semibold text-rose-300">{absentCount}</p>
-            </div>
-          </div>
-
-          <div className="mt-4 overflow-x-auto rounded-[1.75rem] border border-white/10">
-            <table className="min-w-[44rem] w-full">
+          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 hidden md:block">
+            <table className="min-w-[28rem] w-full">
               <thead className="bg-white/5">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Roll</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Time</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">%</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {loading ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-300">
-                      Loading attendance records...
-                    </td>
-                  </tr>
-                ) : filteredRecords.length ? (
-                  filteredRecords.map((record, index) => (
-                    <tr key={`${record.name}-${index}`} className="transition hover:bg-white/5">
-                      <td className="px-4 py-3 text-sm font-medium text-white">{record.name}</td>
-                      <td className="px-4 py-3 text-sm text-slate-300">{record.rollNumber || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-slate-300">{record.checkinTime}</td>
+                {csvRows.length ? (
+                  csvRows.map((row) => (
+                    <tr key={`${row.registrationNumber || row.rollNumber}-${row.name}`} className="transition hover:bg-white/5">
+                      <td className="px-4 py-3 text-sm font-medium text-white">{row.name}</td>
+                      <td className="px-4 py-3 text-sm text-emerald-300">{formatPercentageLabel(row)}</td>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            record.status === 'Present'
+                            row.percentage >= threshold
                               ? 'bg-emerald-500/15 text-emerald-300'
                               : 'bg-rose-500/15 text-rose-300'
                           }`}
                         >
-                          {record.status}
+                          {row.percentage >= threshold ? 'Eligible' : 'Not eligible'}
                         </span>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-300">
-                      No records match the current filters.
+                    <td colSpan={3} className="px-4 py-10 text-center text-sm text-slate-300">
+                      Upload a CSV to see the imported student data here.
                     </td>
                   </tr>
                 )}
@@ -504,20 +516,10 @@ export default function Reports() {
             </table>
           </div>
         </div>
-
-        <div className="min-w-0">
-          <BarGraph rows={csvRows} />
-        </div>
       </div>
 
-      <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-          <h2 className="text-lg font-semibold text-white">Attendance percent</h2>
-        </div>
-        <p className="mt-2 text-sm text-slate-300">
-          Current filtered attendance stands at {attendancePercent}% based on the records loaded from Firebase.
-        </p>
+      <div className="min-w-0">
+        <PieChartCard rows={csvRows} threshold={threshold} />
       </div>
     </div>
   );

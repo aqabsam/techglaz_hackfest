@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Download, Monitor, Play, Square, Smartphone, Users, Wifi, WifiOff, CircleAlert } from 'lucide-react';
 import Modal from '../components/auth/common/Modal';
-import { getAttendanceStatus, startAttendance, stopAttendance } from '../services/api';
+import { getAttendanceExcelUrl, getAttendanceStatus, startAttendance, stopAttendance } from '../services/api';
 import { filterVisibleNames } from '../lib/sitePrivacy';
 import { loadMergedStudentRoster } from '../lib/studentRoster';
 import type { Student } from '../types';
@@ -93,6 +93,14 @@ export default function LiveCCTV() {
       if (!isRunning) return;
       try {
         const status = await getAttendanceStatus();
+        if (!status.running) {
+          setIsRunning(false);
+          setPresentStudents([]);
+          setAbsentStudents([]);
+          setError(status.message || 'Attendance stopped unexpectedly.');
+          setMessage('');
+          return;
+        }
         setPresentStudents(filterVisibleNames(status.present));
         setAbsentStudents(filterVisibleNames(status.absent));
       } catch {
@@ -115,7 +123,7 @@ export default function LiveCCTV() {
     setMessage('');
     setLoading(true);
 
-    try {
+      try {
       const result = await startAttendance(mode || 'webcam', source);
       setMessage(result.message || 'Attendance started');
       await delay(1500);
@@ -123,7 +131,7 @@ export default function LiveCCTV() {
 
       if (!status.running) {
         setIsRunning(false);
-        setError(result.message || 'Live attendance is unavailable in this frontend-only build.');
+        setError(status.message || result.message || 'Live attendance is unavailable right now.');
         return;
       }
 
@@ -155,7 +163,8 @@ export default function LiveCCTV() {
   };
 
   const handleDownloadExcel = () => {
-    setError('Attendance export is unavailable without the backend.');
+    const url = getAttendanceExcelUrl();
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const rosterCards = useMemo(() => rosterStudents.slice(0, 8), [rosterStudents]);
@@ -171,14 +180,14 @@ export default function LiveCCTV() {
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">Live CCTV Attendance</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Use the front webcam preview to confirm your device camera. Live recognition was previously handled by the backend and is no longer part of this frontend-only build.
+              Use the front webcam preview to confirm your device camera. Live recognition and export controls are handled by the backend service.
             </p>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-slate-950/55 px-5 py-4 text-white backdrop-blur-xl">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Mode</p>
             <p className="mt-2 text-lg font-semibold">{currentModeLabel || 'Not selected'}</p>
-            <p className="text-sm text-slate-400">Backend-free preview only</p>
+            <p className="text-sm text-slate-400">Backend-connected preview</p>
           </div>
         </div>
       </div>
@@ -249,8 +258,8 @@ export default function LiveCCTV() {
             {mode === 'webcam' ? 'Camera ready' : 'Enter camera source'}
           </h3>
           <p className="mt-2 text-sm text-slate-300">
-            {mode === 'webcam'
-              ? 'The browser preview shows your front camera only. Attendance processing is disabled without the backend.'
+                  {mode === 'webcam'
+              ? 'The browser preview shows your front camera only. Attendance processing is delegated to the backend.'
               : 'Paste the live stream address and start attendance.'}
           </p>
 
@@ -343,7 +352,7 @@ export default function LiveCCTV() {
                       Front camera preview
                     </div>
                     <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-200 backdrop-blur">
-                      Front camera is visible here so you can confirm permissions and framing before adding attendance support again.
+                      Front camera is visible here so you can confirm permissions and framing before starting attendance processing.
                     </div>
                   </>
                 ) : (
@@ -401,7 +410,7 @@ export default function LiveCCTV() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Roster source</p>
                 <p className="mt-2 text-sm font-medium text-white">{students.length} students in roster</p>
                 <p className="mt-1 text-sm text-slate-300">
-                  Add student records in Students so the roster stays in sync with Firebase.
+                  Add student records in Students so the roster stays in sync with the backend.
                 </p>
               </div>
 

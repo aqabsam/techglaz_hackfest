@@ -41,7 +41,7 @@ export default function Login() {
           setEmail(credentials.email);
         }
       } catch {
-        // Keep the form usable even if Firebase is temporarily unavailable.
+        // Keep the form usable even if the backend profile lookup is temporarily unavailable.
       }
     };
 
@@ -192,7 +192,7 @@ export default function Login() {
                 {mode === 'signin' ? 'Welcome back' : 'Register teacher account'}
               </h2>
               <p className="mt-2 text-sm text-slate-300">
-                Sign in with the teacher credentials saved in Firebase Realtime Database.
+                Sign in with the teacher credentials saved by the backend.
                 If you are setting it up for the first time, use Register to create the teacher profile.
               </p>
             </div>

@@ -1,7 +1,16 @@
 from flask import Flask, jsonify, request, send_file
-from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from datetime import datetime
+
+try:
+    from flask_cors import CORS
+except ImportError:  # pragma: no cover - fallback for environments without the optional package
+    class CORS:  # type: ignore[override]
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def init_app(self, *args, **kwargs):
+            return None
 import json
 import os
 import signal
@@ -14,7 +23,30 @@ import uuid
 import re
 
 app = Flask(__name__)
-CORS(app)
+
+try:
+    CORS(app)
+except Exception:  # pragma: no cover - fallback for environments without the optional package
+    pass
+
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+
+@app.route('/api/teacher-credentials', methods=['OPTIONS'])
+def teacher_credentials_options():
+    return jsonify({}), 200
+
+
+@app.route('/api/students', methods=['OPTIONS'])
+def students_options():
+    return jsonify({}), 200
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STUDENT_PHOTO_DIR = os.path.join(BASE_DIR, 'KnownFaces')
