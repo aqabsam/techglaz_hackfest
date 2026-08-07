@@ -112,11 +112,11 @@ export default function Landing() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div id="top" className="min-h-screen overflow-hidden bg-[#06111e] text-white">
-      <div className="absolute inset-0">
-        <div className="absolute left-[-8rem] top-[-6rem] h-[26rem] w-[26rem] rounded-full bg-cyan-500/25 blur-3xl" />
-        <div className="absolute right-[-8rem] top-[8rem] h-[24rem] w-[24rem] rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute bottom-[-8rem] left-[20%] h-[22rem] w-[22rem] rounded-full bg-emerald-500/15 blur-3xl" />
+    <div id="top" className="relative isolate min-h-screen overflow-x-hidden bg-[#06111e] text-white">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute left-[-4rem] top-[-4rem] h-[16rem] w-[16rem] rounded-full bg-cyan-500/25 blur-3xl sm:left-[-8rem] sm:top-[-6rem] sm:h-[26rem] sm:w-[26rem]" />
+        <div className="absolute right-[-2rem] top-[8rem] h-[14rem] w-[14rem] rounded-full bg-blue-500/20 blur-3xl sm:right-[-8rem] sm:h-[24rem] sm:w-[24rem]" />
+        <div className="absolute bottom-[-6rem] left-[20%] h-[16rem] w-[16rem] rounded-full bg-emerald-500/15 blur-3xl sm:bottom-[-8rem] sm:h-[22rem] sm:w-[22rem]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(7,17,31,0.2),rgba(7,17,31,0.9))]" />
         <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(14,165,233,0.08),transparent_28%,rgba(34,211,238,0.05)_72%,transparent)]" />
       </div>
@@ -230,17 +230,17 @@ export default function Landing() {
         )}
       </nav>
 
-      <main className="relative pt-24">
-        <section className="px-4 pb-12 pt-8 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div className="space-y-8">
+      <main className="relative pt-20 sm:pt-24">
+        <section className="px-3 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-6 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div className="space-y-6 sm:space-y-8">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-white/10 px-4 py-2 text-sm text-cyan-100 backdrop-blur-xl">
                 <BadgeCheck className="h-4 w-4" />
                 Live attendance made modern
               </div>
 
-              <div className="space-y-5">
-                <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight text-white sm:text-5xl lg:text-7xl">
+              <div className="space-y-4 sm:space-y-5">
+                <h1 className="max-w-3xl text-3xl font-semibold leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-7xl">
                   TechGlaz Fest for
                   <span className="block bg-gradient-to-r from-cyan-300 via-sky-200 to-blue-300 bg-clip-text text-transparent">
                     modern attendance management
@@ -251,23 +251,23 @@ export default function Landing() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
                 <Link
                   to="/login"
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-950 shadow-xl shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:bg-cyan-50"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-950 shadow-xl shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:bg-cyan-50 sm:w-auto"
                 >
                   Teacher Portal
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <a
                   href="#features"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10 sm:w-auto"
                 >
                   Explore Features
                 </a>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                 {[
                   ['TechGlaz Fest profile', 'Teacher login'],
                   ['Realtime roster', 'Live attendance'],
@@ -328,7 +328,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="portals" className="px-4 py-10 sm:px-6 lg:px-8">
+        <section id="portals" className="px-3 py-6 sm:px-6 sm:py-10 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <div className="mb-6 max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Choose a portal</p>
@@ -345,7 +345,7 @@ export default function Landing() {
                 <Link
                   key={portal.title}
                   to={portal.href}
-                  className={`group rounded-[1.9rem] border border-white/10 bg-gradient-to-br ${portal.accent} p-6 shadow-[0_24px_90px_-35px_rgba(14,165,233,0.35)] backdrop-blur-2xl transition duration-300 hover:-translate-y-1 hover:border-cyan-300/30`}
+                  className={`group rounded-[1.9rem] border border-white/10 bg-gradient-to-br ${portal.accent} p-4 shadow-[0_24px_90px_-35px_rgba(14,165,233,0.35)] backdrop-blur-2xl transition duration-300 hover:-translate-y-1 hover:border-cyan-300/30 sm:p-6`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">
@@ -364,7 +364,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="features" className="px-4 py-16 sm:px-6 lg:px-8">
+        <section id="features" className="px-3 py-8 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <div className="mb-10 max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Features</p>
@@ -381,8 +381,8 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="how-it-works" className="px-4 py-16 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-7xl rounded-[2.25rem] border border-white/10 bg-white/10 p-6 backdrop-blur-2xl sm:p-8">
+        <section id="how-it-works" className="px-3 py-8 sm:px-6 sm:py-16 lg:px-8">
+            <div className="mx-auto max-w-7xl rounded-[2.25rem] border border-white/10 bg-white/10 p-4 backdrop-blur-2xl sm:p-8">
             <div className="mb-10 max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">How it works</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
@@ -390,11 +390,11 @@ export default function Landing() {
               </h2>
             </div>
 
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               {steps.map((item) => (
                 <div
                   key={item.step}
-                  className="rounded-[1.75rem] border border-white/15 bg-white/10 p-6 backdrop-blur-2xl transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/15 hover:shadow-[0_28px_90px_-32px_rgba(14,165,233,0.45)]"
+                  className="rounded-[1.75rem] border border-white/15 bg-white/10 p-4 backdrop-blur-2xl transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/15 hover:shadow-[0_28px_90px_-32px_rgba(14,165,233,0.45)] sm:p-6"
                 >
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 text-lg font-bold text-white shadow-lg shadow-cyan-500/25">
                     {item.step}
@@ -407,9 +407,9 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="cta" className="px-4 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl rounded-[2.25rem] border border-white/10 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-emerald-500/20 p-8 shadow-[0_30px_100px_-40px_rgba(14,165,233,0.5)] backdrop-blur-2xl">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <section id="cta" className="px-3 py-8 sm:px-6 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-7xl rounded-[2.25rem] border border-white/10 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-emerald-500/20 p-5 shadow-[0_30px_100px_-40px_rgba(14,165,233,0.5)] backdrop-blur-2xl sm:p-8">
+              <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="max-w-2xl">
                 <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-100">Ready to begin</p>
                 <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
@@ -432,7 +432,7 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="relative border-t border-white/10 bg-slate-950/75 px-4 py-10 backdrop-blur-2xl sm:px-6 lg:px-8">
+      <footer className="relative border-t border-white/10 bg-slate-950/75 px-3 py-8 backdrop-blur-2xl sm:px-6 sm:py-10 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1.25fr_0.75fr_0.75fr]">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
