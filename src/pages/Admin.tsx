@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Save, Plus, Trash2, Settings2, CircleCheckBig } from 'lucide-react';
+import { Save, Plus, Trash2, Settings2, CircleCheckBig, Camera, Activity, Radio, Zap, MonitorPlay } from 'lucide-react';
 import type { CameraConfig } from '../types';
 
 export default function Admin() {
@@ -51,18 +51,30 @@ export default function Admin() {
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4 text-white backdrop-blur-xl">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Sources</p>
+            <div className="flex items-center gap-2 text-cyan-200">
+              <Camera className="h-4 w-4" />
+              <p className="text-xs uppercase tracking-[0.2em]">Sources</p>
+            </div>
             <p className="mt-3 text-3xl font-semibold">{cameras.length}</p>
+            <p className="mt-1 text-sm text-slate-400">Configured input sources</p>
           </div>
           <div className="rounded-3xl border border-emerald-400/15 bg-emerald-500/10 p-4 text-white backdrop-blur-xl">
-            <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Active</p>
+            <div className="flex items-center gap-2 text-emerald-200">
+              <Activity className="h-4 w-4" />
+              <p className="text-xs uppercase tracking-[0.2em]">Active</p>
+            </div>
             <p className="mt-3 text-3xl font-semibold">{cameras.filter((camera) => camera.status === 'active').length}</p>
+            <p className="mt-1 text-sm text-emerald-100/80">Live and ready</p>
           </div>
           <div className="rounded-3xl border border-cyan-400/15 bg-cyan-500/10 p-4 text-white backdrop-blur-xl">
-            <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">Ready</p>
-            <p className="mt-3 text-3xl font-semibold">Camera stack</p>
+            <div className="flex items-center gap-2 text-cyan-100">
+              <Zap className="h-4 w-4" />
+              <p className="text-xs uppercase tracking-[0.2em]">Mode</p>
+            </div>
+            <p className="mt-3 text-3xl font-semibold">CCTV</p>
+            <p className="mt-1 text-sm text-cyan-100/80">Webcam, IP, and RTSP support</p>
           </div>
         </div>
       </div>
@@ -73,7 +85,7 @@ export default function Admin() {
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-500/10 ring-1 ring-cyan-400/20">
-                  <Shield className="h-5 w-5 text-cyan-700" />
+                  <MonitorPlay className="h-5 w-5 text-cyan-300" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-white">Camera configuration</h2>
@@ -91,7 +103,7 @@ export default function Admin() {
             </div>
 
             {showAddForm && (
-              <div className="mb-5 rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+              <div className="mb-5 rounded-[1.5rem] border border-cyan-400/15 bg-cyan-500/10 p-4">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto_auto]">
                   <input
                     type="text"
@@ -139,11 +151,9 @@ export default function Admin() {
                   className="flex flex-col gap-4 rounded-[1.4rem] border border-white/10 bg-white/5 px-4 py-4 transition hover:bg-white/10 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        camera.status === 'active' ? 'bg-emerald-500' : camera.status === 'error' ? 'bg-rose-500' : 'bg-slate-400'
-                      }`}
-                    />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10 ring-1 ring-cyan-400/20">
+                      {camera.type === 'cctv' ? <Radio className="h-5 w-5 text-cyan-300" /> : <Camera className="h-5 w-5 text-cyan-300" />}
+                    </div>
                     <div>
                       <p className="text-sm font-semibold text-white">{camera.name}</p>
                       <p className="text-xs text-slate-300">{camera.ipAddress}</p>
@@ -151,10 +161,12 @@ export default function Admin() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">{camera.type}</span>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
+                      {camera.type}
+                    </span>
                     <button
                       onClick={() => handleDelete(camera.id)}
-                      className="rounded-xl p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                      className="rounded-xl p-2 text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-300"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -169,7 +181,7 @@ export default function Admin() {
           <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/10 ring-1 ring-violet-400/20">
-                <CircleCheckBig className="h-5 w-5 text-violet-700" />
+                <CircleCheckBig className="h-5 w-5 text-violet-300" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">System settings</h2>
@@ -211,8 +223,11 @@ export default function Admin() {
           <div className="rounded-[2rem] border border-white/10 bg-slate-950/55 p-4 text-white shadow-2xl shadow-slate-900/20 backdrop-blur-xl sm:p-6">
             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Quick note</p>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              This admin panel is now styled like the rest of the portal, with transparent layers and cleaner camera management cards.
+              Use this workspace to keep camera sources organized, verify attendance flow readiness, and manage the core classroom setup from one place.
             </p>
+            <div className="mt-4 rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-3 text-sm text-cyan-100">
+              Recommended: keep at least one active source ready before starting a session.
+            </div>
           </div>
         </div>
       </div>
