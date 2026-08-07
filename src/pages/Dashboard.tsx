@@ -1,10 +1,20 @@
-import { useEffect, useState } from 'react';
-import { Users, Camera, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Users, Camera, CheckCircle2, Activity } from 'lucide-react';
 import StatCard from '../components/auth/common/StatCard';
 import { getAttendanceRecords, getDashboardStats } from '../services/api';
 import type { AttendanceRecord, DashboardStats } from '../types';
 import { filterVisibleAttendanceRecords, filterVisibleStudents } from '../lib/sitePrivacy';
 import { loadMergedStudentRoster } from '../lib/studentRoster';
+
+type StudentSummary = {
+  name: string;
+  rollNumber: string;
+  present: number;
+  total: number;
+  percent: number;
+  firstSeen: string;
+  lastSeen: string;
+};
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -14,6 +24,8 @@ export default function Dashboard() {
     totalAlerts: 0,
   });
   const [recentActivity, setRecentActivity] = useState<AttendanceRecord[]>([]);
+  const [studentSummary, setStudentSummary] = useState<StudentSummary[]>([]);
+  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([]);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -26,12 +38,38 @@ export default function Dashboard() {
 
         const visibleStudents = filterVisibleStudents(mergedStudents);
         const visibleRecords = filterVisibleAttendanceRecords(records);
+        const normalizedName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+
+        const summaries = visibleStudents.map((student) => {
+          const matchingRecords = visibleRecords.filter((record) => {
+            const sameRoll = Boolean(student.rollNumber && record.rollNumber && student.rollNumber === record.rollNumber);
+            const sameName = normalizedName(record.name) === normalizedName(student.name);
+            return sameRoll || sameName;
+          });
+
+          const present = matchingRecords.filter((record) => record.status === 'Present').length;
+          const total = matchingRecords.length;
+          const percent = total ? Math.round((present / total) * 100) : 0;
+          const sortedDates = matchingRecords.map((record) => record.date).filter(Boolean).sort();
+
+          return {
+            name: student.name,
+            rollNumber: student.rollNumber,
+            present,
+            total,
+            percent,
+            firstSeen: sortedDates[0] || '—',
+            lastSeen: sortedDates[sortedDates.length - 1] || '—',
+          };
+        }).filter((item) => item.total > 0 || item.name);
 
         setStats({
           ...statsData,
           totalStudents: visibleStudents.length || statsData.totalStudents,
         });
+        setAttendanceHistory(visibleRecords);
         setRecentActivity(visibleRecords.slice(-6).reverse());
+        setStudentSummary(summaries.sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name)));
       } catch {
       }
     };
@@ -39,11 +77,13 @@ export default function Dashboard() {
     loadDashboard();
   }, []);
 
+  const classDays = useMemo(() => new Set(attendanceHistory.map((record) => record.date).filter(Boolean)).size, [attendanceHistory]);
+
   const statCards = [
     { title: 'Total Students', value: String(stats.totalStudents), icon: Users, trend: 'Student roster', trendUp: true, color: 'blue' as const },
     { title: 'Active Cameras', value: String(stats.activeCameras), icon: Camera, trend: 'Webcam or CCTV', trendUp: true, color: 'green' as const },
     { title: "Today's Attendance", value: String(stats.todayAttendance), icon: CheckCircle2, trend: 'Present today', trendUp: true, color: 'amber' as const },
-    { title: 'Alerts', value: String(stats.totalAlerts), icon: AlertTriangle, trend: 'System notices', trendUp: false, color: 'purple' as const },
+    { title: 'Class Days', value: String(classDays), icon: Activity, trend: 'Historical sessions', trendUp: true, color: 'purple' as const },
   ];
 
   return (
@@ -115,31 +155,68 @@ export default function Dashboard() {
         </div>
 
         <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
-          <h2 className="text-lg font-semibold text-white">System Snapshot</h2>
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center justify-between rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4">
+          <h2 className="text-lg font-semibold text-white">Student attendance summary</h2>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+            <table className="min-w-[32rem] w-full">
+              <thead className="bg-white/5">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Student</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Present</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Classes</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {studentSummary.length ? (
+                  studentSummary.map((item) => (
+                    <tr key={item.rollNumber || item.name} className="transition hover:bg-white/5">
+                      <td className="px-4 py-3 text-sm font-medium text-white">
+                        <div>{item.name}</div>
+                        <div className="text-xs text-slate-400">{item.rollNumber || 'No roll'}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-300">{item.present}</td>
+                      <td className="px-4 py-3 text-sm text-slate-300">{item.total}</td>
+                      <td className="px-4 py-3 text-sm font-semibold text-cyan-200">{item.percent}%</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-300">
+                      Attendance summaries will appear once records are available.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
+        <h2 className="text-lg font-semibold text-white">System Snapshot</h2>
+        <div className="mt-4 space-y-4">
+          <div className="flex items-center justify-between rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4">
             <div>
-                <p className="text-sm font-medium text-white">Students ready</p>
-                <p className="text-xs text-slate-300">Loaded from your roster data</p>
-              </div>
-              <span className="text-2xl font-semibold text-emerald-300">{stats.totalStudents}</span>
+              <p className="text-sm font-medium text-white">Students ready</p>
+              <p className="text-xs text-slate-300">Loaded from your roster data</p>
             </div>
+            <span className="text-2xl font-semibold text-emerald-300">{stats.totalStudents}</span>
+          </div>
 
-            <div className="flex items-center justify-between rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-4">
-              <div>
-                <p className="text-sm font-medium text-white">Cameras active</p>
-                <p className="text-xs text-slate-300">Webcam or CCTV sessions in progress</p>
-              </div>
-              <span className="text-2xl font-semibold text-cyan-300">{stats.activeCameras}</span>
+          <div className="flex items-center justify-between rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-4">
+            <div>
+              <p className="text-sm font-medium text-white">Cameras active</p>
+              <p className="text-xs text-slate-300">Webcam or CCTV sessions in progress</p>
             </div>
+            <span className="text-2xl font-semibold text-cyan-300">{stats.activeCameras}</span>
+          </div>
 
-            <div className="flex items-center justify-between rounded-2xl border border-rose-400/15 bg-rose-500/10 p-4">
-              <div>
-                <p className="text-sm font-medium text-white">Alerts</p>
-                <p className="text-xs text-slate-300">Currently no active warning rules</p>
-              </div>
-              <span className="text-2xl font-semibold text-rose-300">{stats.totalAlerts}</span>
+          <div className="flex items-center justify-between rounded-2xl border border-rose-400/15 bg-rose-500/10 p-4">
+            <div>
+              <p className="text-sm font-medium text-white">Alerts</p>
+              <p className="text-xs text-slate-300">Currently no active warning rules</p>
             </div>
+            <span className="text-2xl font-semibold text-rose-300">{stats.totalAlerts}</span>
           </div>
         </div>
       </div>
