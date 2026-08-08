@@ -22,6 +22,7 @@ import urllib.error
 import urllib.request
 import uuid
 import re
+import shutil
 
 app = Flask(__name__)
 
@@ -59,8 +60,9 @@ EXCEL_FILE = os.environ.get('ATTENDANCE_EXPORT_FILE') or os.path.join(EXPORT_DIR
 ATTENDANCE_SCRIPT = os.path.join(BASE_DIR, 'attendance_runner.py')
 ATTENDANCE_RUNTIME_DIR = os.path.join(BASE_DIR, 'runtime')
 ATTENDANCE_FRAME_FILE = os.path.join(ATTENDANCE_RUNTIME_DIR, 'attendance_frame.jpg')
+ATTENDANCE_STATUS_FILE = os.path.join(ATTENDANCE_RUNTIME_DIR, 'attendance_status.json')
 HOST = os.environ.get('HOST', '0.0.0.0')
-PORT = int(os.environ.get('PORT', '5000'))
+PORT = int(os.environ.get('ATTENDANCE_PORT') or os.environ.get('PORT', '5000'))
 USE_FIREBASE = os.environ.get('USE_FIREBASE', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 os.makedirs(STUDENT_PHOTO_DIR, exist_ok=True)
@@ -68,6 +70,27 @@ os.makedirs(ATTENDANCE_RUNTIME_DIR, exist_ok=True)
 
 attendance_process = None
 attendance_last_error = ''
+
+
+def resolve_python_executable():
+    preferred = os.environ.get('ATTENDANCE_PYTHON_EXECUTABLE', '').strip()
+    if preferred:
+      return preferred
+
+    for candidate in ('python3', 'python'):
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+
+    return sys.executable
+
+
+def should_show_attendance_window():
+    configured = os.environ.get('ATTENDANCE_SHOW_WINDOW', '').strip().lower()
+    if configured:
+        return configured in {'1', 'true', 'yes', 'on'}
+
+    return sys.platform == 'darwin'
 
 
 def load_env_file(path):
@@ -103,6 +126,14 @@ def clear_latest_frame():
     try:
         if os.path.exists(ATTENDANCE_FRAME_FILE):
             os.remove(ATTENDANCE_FRAME_FILE)
+    except Exception:
+        pass
+
+
+def clear_latest_status():
+    try:
+        if os.path.exists(ATTENDANCE_STATUS_FILE):
+            os.remove(ATTENDANCE_STATUS_FILE)
     except Exception:
         pass
 
@@ -366,6 +397,37 @@ def normalize_source(mode, source):
     if not source:
         return ''
     return source.strip()
+
+
+def webcam_source_is_available(source='0'):
+    try:
+        import cv2
+
+        is_digit_source = str(source).isdigit()
+        candidate_sources = [int(source) if is_digit_source else source]
+
+        if is_digit_source:
+            candidate_sources = [int(source), 0, 1, 2, 3]
+
+        for candidate in candidate_sources:
+            if isinstance(candidate, int):
+                for backend in (cv2.CAP_AVFOUNDATION, cv2.CAP_ANY):
+                    capture = cv2.VideoCapture(candidate, backend)
+                    if capture.isOpened():
+                        capture.release()
+                        return True
+                    capture.release()
+            else:
+                capture = cv2.VideoCapture(candidate, cv2.CAP_ANY)
+                try:
+                    if capture.isOpened():
+                        return True
+                finally:
+                    capture.release()
+
+        return False
+    except Exception:
+        return False
 
 
 def normalize_status_value(value):
@@ -759,27 +821,31 @@ def start_attendance():
             attendance_last_error = 'No student photos were found. Upload a photo for each student in Students before starting attendance.'
             return jsonify({'error': attendance_last_error}), 400
 
-        current_excel_file = create_session_excel_file()
-        clear_latest_frame()
         if mode == 'webcam':
             source = '0'
         elif not source:
             return jsonify({'error': 'IP camera or CCTV source is required'}), 400
 
+        current_excel_file = create_session_excel_file()
+        clear_latest_frame()
+        clear_latest_status()
+
         env = os.environ.copy()
         env['ATTENDANCE_EXPORT_FILE'] = current_excel_file
         env['ATTENDANCE_REPORT_TITLE'] = 'Attenzo Attendance Report'
-        env['ATTENDANCE_SHOW_WINDOW'] = '0'
+        env['ATTENDANCE_SHOW_WINDOW'] = '1' if should_show_attendance_window() else '0'
         env['ATTENDANCE_USE_LOCAL_FILES'] = '1'
         env['ATTENDANCE_RUNTIME_DIR'] = ATTENDANCE_RUNTIME_DIR
         env['ATTENDANCE_FRAME_FILE'] = ATTENDANCE_FRAME_FILE
+        env['ATTENDANCE_STATUS_FILE'] = ATTENDANCE_STATUS_FILE
         env['ATTENDANCE_SESSION_ROLLS'] = ','.join(
             [str(student.get('rollNumber', '')).strip() for student in students if student.get('rollNumber')]
         )
         env['ATTENDANCE_STUDENTS_API_URL'] = f'{request.host_url.rstrip("/")}/api/students'
+        python_executable = resolve_python_executable()
 
         attendance_process = subprocess.Popen(
-            [sys.executable, '-u', ATTENDANCE_SCRIPT, '--mode', mode, '--source', source],
+            [python_executable, '-u', ATTENDANCE_SCRIPT, '--mode', mode, '--source', source],
             cwd=BASE_DIR,
             env=env,
             preexec_fn=os.setsid,
@@ -823,6 +889,7 @@ def stop_attendance():
         attendance_process = None
         attendance_last_error = ''
         clear_latest_frame()
+        clear_latest_status()
         return jsonify({
             'success': True,
             'message': 'Attendance stopped',
@@ -832,43 +899,56 @@ def stop_attendance():
     attendance_process = None
     attendance_last_error = ''
     clear_latest_frame()
+    clear_latest_status()
     return jsonify({'error': 'No attendance process running'}), 400
 
 
 @app.route('/api/attendance/status')
 def attendance_status():
     running = attendance_process is not None and attendance_process.poll() is None
-    present = []
+    status_payload = {}
 
-    excel_file = get_active_excel_file()
-    sheet_name = get_today_sheet_name()
-
-    if os.path.exists(excel_file):
+    if os.path.exists(ATTENDANCE_STATUS_FILE):
         try:
-            from openpyxl import load_workbook
-
-            wb = load_workbook(excel_file)
-            if sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                for row in ws.iter_rows(min_row=3, values_only=True):
-                    record = parse_attendance_row(row)
-                    if record and record.get('status') == 'Present':
-                        present.append(record.get('name'))
+            with open(ATTENDANCE_STATUS_FILE, 'r', encoding='utf-8') as file:
+                loaded = json.load(file)
+                if isinstance(loaded, dict):
+                    status_payload = loaded
         except Exception:
-            pass
+            status_payload = {}
 
-    absent = []
-    present_names = set(present)
-    for student in load_students():
-        if student.get('name') not in present_names:
-            absent.append(student.get('name'))
+    last_marked = status_payload.get('lastMarked')
+    if not isinstance(last_marked, dict):
+        last_marked = None
+
+    try:
+        present_count = int(status_payload.get('presentCount') or 0)
+    except Exception:
+        present_count = 0
 
     return jsonify({
         'running': running,
-        'present': present,
-        'absent': absent,
+        'presentCount': present_count,
+        'lastMarked': last_marked,
         'message': '' if running else attendance_last_error,
     })
+
+
+@app.route('/api/attendance/frame')
+def attendance_frame():
+    if not os.path.exists(ATTENDANCE_FRAME_FILE):
+        return jsonify({'error': 'Attendance frame is not ready yet'}), 404
+
+    response = send_file(
+        ATTENDANCE_FRAME_FILE,
+        mimetype='image/jpeg',
+        conditional=False,
+        max_age=0,
+    )
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @app.route('/api/attendance/feed')

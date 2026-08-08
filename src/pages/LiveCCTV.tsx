@@ -1,26 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, Download, Monitor, Play, Square, Smartphone, Users, Wifi, WifiOff, CircleAlert } from 'lucide-react';
+import { Camera, Download, Monitor, Play, Square, Smartphone, Users, Wifi, CircleAlert } from 'lucide-react';
 import Modal from '../components/auth/common/Modal';
 import { getAttendanceExcelUrl, getAttendanceFeedUrl, getAttendanceStatus, startAttendance, stopAttendance } from '../services/api';
-import { filterVisibleNames } from '../lib/sitePrivacy';
+import { withApiOrigin } from '../lib/apiBase';
 import { loadMergedStudentRoster } from '../lib/studentRoster';
 import type { Student } from '../types';
 
 type CameraMode = 'webcam' | 'ip_camera' | 'cctv' | null;
 
+const SESSION_UI_MIN_MS = 3 * 60 * 1000;
+
 export default function LiveCCTV() {
   const [mode, setMode] = useState<CameraMode>(null);
   const [source, setSource] = useState('');
-  const [isRunning, setIsRunning] = useState(false);
-  const [presentStudents, setPresentStudents] = useState<string[]>([]);
-  const [absentStudents, setAbsentStudents] = useState<string[]>([]);
+  const [sessionActive, setSessionActive] = useState(false);
+  const [sessionGraceVisible, setSessionGraceVisible] = useState(false);
+  const [backendRunning, setBackendRunning] = useState(false);
+  const [presentCount, setPresentCount] = useState(0);
+  const [lastMarked, setLastMarked] = useState<{ name?: string; rollNumber?: string; time?: string } | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [rosterStudents, setRosterStudents] = useState<Student[]>([]);
+  const [excelUrl, setExcelUrl] = useState(getAttendanceExcelUrl());
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [showStopDialog, setShowStopDialog] = useState(false);
   const feedUrl = getAttendanceFeedUrl();
+  const showSessionPanel = sessionActive || sessionGraceVisible;
 
   useEffect(() => {
     const loadRoster = async () => {
@@ -39,26 +45,40 @@ export default function LiveCCTV() {
 
   useEffect(() => {
     const timer = window.setInterval(async () => {
-      if (!isRunning) return;
+      if (!showSessionPanel) return;
       try {
         const status = await getAttendanceStatus();
-        if (!status.running) {
-          setIsRunning(false);
-          setPresentStudents([]);
-          setAbsentStudents([]);
-          setError(status.message || 'Attendance stopped unexpectedly.');
-          setMessage('');
-          return;
+        setBackendRunning(Boolean(status.running));
+
+        setPresentCount(status.presentCount || 0);
+        setLastMarked(status.lastMarked ? {
+          name: status.lastMarked.name || '',
+          rollNumber: status.lastMarked.rollNumber || '',
+          time: status.lastMarked.time || '',
+        } : null);
+
+        if (!status.running && status.message) {
+          setError(status.message);
         }
-        setPresentStudents(filterVisibleNames(status.present));
-        setAbsentStudents(filterVisibleNames(status.absent));
       } catch {
         // ignore live polling failures
       }
-    }, 6000);
+    }, 3000);
 
     return () => window.clearInterval(timer);
-  }, [isRunning]);
+  }, [showSessionPanel]);
+
+  useEffect(() => {
+    if (!sessionGraceVisible) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSessionGraceVisible(false);
+    }, SESSION_UI_MIN_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [sessionGraceVisible]);
 
   const currentModeLabel = useMemo(() => {
     if (mode === 'webcam') return 'Front camera webcam';
@@ -72,22 +92,30 @@ export default function LiveCCTV() {
     setMessage('');
     setLoading(true);
 
-      try {
+    try {
       const result = await startAttendance(mode || 'webcam', source);
       setMessage(result.message || 'Attendance started');
+      setSessionActive(true);
+      setSessionGraceVisible(true);
+      setBackendRunning(true);
 
-      const status = await getAttendanceStatus();
-      if (!status.running) {
-        setIsRunning(false);
-        setError(status.message || result.message || 'Live attendance is unavailable right now.');
-        return;
+      try {
+        const status = await getAttendanceStatus();
+        setBackendRunning(Boolean(status.running));
+        setPresentCount(status.presentCount || 0);
+        setLastMarked(status.lastMarked ? {
+          name: status.lastMarked.name || '',
+          rollNumber: status.lastMarked.rollNumber || '',
+          time: status.lastMarked.time || '',
+        } : null);
+        if (!status.running && status.message) {
+          setError(status.message);
+        }
+      } catch {
+        // Keep the running view visible; the polling loop will refresh shortly.
       }
-
-      setIsRunning(true);
-      setPresentStudents(filterVisibleNames(status.present));
-      setAbsentStudents(filterVisibleNames(status.absent));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to start attendance.');
+      setError(err instanceof Error ? err.message : 'Unable to start attendance. Check backend and camera access.');
     } finally {
       setLoading(false);
     }
@@ -99,9 +127,17 @@ export default function LiveCCTV() {
 
     try {
       const result = await stopAttendance();
-      setIsRunning(false);
+      setSessionActive(false);
+      setSessionGraceVisible(false);
+      setBackendRunning(false);
       setMode(null);
+      setPresentCount(0);
+      setLastMarked(null);
       setMessage(result.message || 'Attendance stopped');
+
+      if (result.excelUrl) {
+        setExcelUrl(withApiOrigin(result.excelUrl));
+      }
       setShowStopDialog(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to stop attendance.');
@@ -111,8 +147,7 @@ export default function LiveCCTV() {
   };
 
   const handleDownloadExcel = () => {
-    const url = getAttendanceExcelUrl();
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(excelUrl || getAttendanceExcelUrl(), '_blank', 'noopener,noreferrer');
   };
 
   const rosterCards = useMemo(() => rosterStudents.slice(0, 8), [rosterStudents]);
@@ -128,7 +163,7 @@ export default function LiveCCTV() {
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">Live CCTV Attendance</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Start attendance to show the Python camera feed here. Live recognition and export controls are handled by the backend service.
+              Use the front webcam, a phone IP camera, or an RTSP CCTV stream. Recognition is driven by the student roster you manage in Students.
             </p>
           </div>
 
@@ -151,7 +186,7 @@ export default function LiveCCTV() {
         </div>
       )}
 
-      {!isRunning && (
+      {!showSessionPanel && (
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           <button
             onClick={() => setMode('webcam')}
@@ -200,13 +235,13 @@ export default function LiveCCTV() {
         </div>
       )}
 
-      {!isRunning && mode && (
+      {!showSessionPanel && mode && (
         <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl sm:p-6">
           <h3 className="text-lg font-semibold text-white">
             {mode === 'webcam' ? 'Camera ready' : 'Enter camera source'}
           </h3>
           <p className="mt-2 text-sm text-slate-300">
-                  {mode === 'webcam'
+            {mode === 'webcam'
               ? 'The backend will open your device webcam and show the processed feed on this page.'
               : 'Paste the live stream address and start attendance.'}
           </p>
@@ -227,14 +262,14 @@ export default function LiveCCTV() {
           )}
 
           <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  onClick={handleStart}
-                  disabled={loading || (mode !== 'webcam' && !source)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Play className="h-5 w-5" />
-                  {loading ? 'Starting...' : 'Start Attendance'}
-                </button>
+            <button
+              onClick={handleStart}
+              disabled={loading || (mode !== 'webcam' && !source)}
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Play className="h-5 w-5" />
+              {loading ? 'Starting...' : mode === 'webcam' ? 'Start Front Camera Attendance' : 'Start Attendance'}
+            </button>
             <button
               onClick={() => setMode(null)}
               className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
@@ -245,20 +280,24 @@ export default function LiveCCTV() {
         </div>
       )}
 
-      {isRunning && (
+      {showSessionPanel && (
         <div className="space-y-6">
           <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-[0_30px_90px_-40px_rgba(14,165,233,0.35)] backdrop-blur-2xl">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-300">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Attendance running
+                <div className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
+                  backendRunning
+                    ? 'border border-emerald-400/15 bg-emerald-500/10 text-emerald-300'
+                    : 'border border-amber-400/15 bg-amber-500/10 text-amber-200'
+                }`}>
+                  <span className={`h-2.5 w-2.5 rounded-full ${backendRunning ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  {backendRunning ? 'Attendance running' : 'Attendance session active'}
                 </div>
                 <span className="text-sm text-slate-300">{currentModeLabel}</span>
                 {source && <span className="text-sm text-slate-400">{source}</span>}
               </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={handleStop}
                   disabled={loading}
@@ -268,26 +307,45 @@ export default function LiveCCTV() {
                     <Square className="h-4 w-4" />
                   </span>
                   <span className="flex flex-col items-start leading-tight">
-                    <span>{loading ? 'Stopping...' : 'Stop Camera'}</span>
+                    <span>{loading ? 'Stopping...' : 'Stop Attendance'}</span>
                     <span className="text-[11px] font-normal text-rose-100/90">Finish the session and review export options</span>
                   </span>
                 </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadExcel}
+                <a
+                  href={excelUrl}
+                  target="_blank"
+                  rel="noreferrer"
                   className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/15"
                 >
                   <Download className="h-4 w-4" />
-                  Download Records
-                </button>
+                  Download Excel
+                </a>
               </div>
             </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[1.5fr_0.9fr]">
-          <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-3 shadow-2xl shadow-slate-900/20 sm:p-4">
+            <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-3 shadow-2xl shadow-slate-900/20 sm:p-4">
               <div className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.2),_rgba(15,23,42,1)_60%)]">
-                {isRunning ? (
+                {mode === 'webcam' ? (
+                  <>
+                    <div className="flex aspect-video h-full w-full items-center justify-center p-6">
+                      <div className="max-w-md text-center">
+                        <Camera className="mx-auto h-14 w-14 text-cyan-300/90" />
+                        <p className="mt-4 text-lg font-semibold text-white">Device webcam runs in Python only</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">
+                          The browser will not grab the camera, so the backend can use your laptop webcam directly without a conflict.
+                        </p>
+                        <p className="mt-3 text-xs text-slate-400">
+                          If the webcam still does not open, make sure Terminal or Python has Camera permission in macOS Privacy &amp; Security.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="absolute left-4 top-4 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/10">
+                      Webcam mode
+                    </div>
+                  </>
+                ) : (
                   <>
                     <img
                       src={feedUrl}
@@ -295,20 +353,12 @@ export default function LiveCCTV() {
                       className="aspect-video h-full w-full object-cover"
                     />
                     <div className="absolute left-4 top-4 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/10">
-                      Python feed
+                      Live feed
                     </div>
                     <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-200 backdrop-blur">
-                      The backend is processing the camera and sending the live feed to this page.
+                      The backend is processing the camera and streaming attendance here.
                     </div>
                   </>
-                ) : (
-                  <div className="flex aspect-video items-center justify-center">
-                    <div className="text-center">
-                      <Camera className="mx-auto h-16 w-16 text-cyan-300/80" />
-                      <p className="mt-4 text-sm text-slate-200">Start attendance to show the Python camera feed here</p>
-                      <p className="mt-2 text-xs text-slate-400">Recognition uses only the students stored in your roster</p>
-                    </div>
-                  </div>
                 )}
               </div>
             </div>
@@ -317,38 +367,30 @@ export default function LiveCCTV() {
               <div className="rounded-[1.75rem] border border-emerald-400/15 bg-white/10 p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl">
                 <div className="mb-3 flex items-center gap-2">
                   <Wifi className="h-4 w-4 text-emerald-600" />
-                  <h3 className="text-sm font-semibold text-white">Present ({presentStudents.length})</h3>
+                  <h3 className="text-sm font-semibold text-white">Current session</h3>
                 </div>
-                <div className="space-y-2">
-                  {presentStudents.length ? (
-                    presentStudents.map((name) => (
-                      <div key={name} className="rounded-2xl border border-emerald-400/10 bg-emerald-500/10 px-3 py-2 text-sm text-slate-200">
-                        {name}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="rounded-2xl border border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-300">No one has been recognized yet.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[1.75rem] border border-rose-400/15 bg-white/10 p-4 shadow-lg shadow-slate-900/5 backdrop-blur-2xl">
-                <div className="mb-3 flex items-center gap-2">
-                  <WifiOff className="h-4 w-4 text-rose-600" />
-                  <h3 className="text-sm font-semibold text-white">Absent ({absentStudents.length})</h3>
-                </div>
-                <div className="space-y-2">
-                  {absentStudents.length ? (
-                    absentStudents.map((name) => (
-                      <div key={name} className="rounded-2xl border border-rose-400/10 bg-rose-500/10 px-3 py-2 text-sm text-slate-200">
-                        {name}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="rounded-2xl border border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-300">
-                      Absent list will appear once students are loaded and attendance starts.
-                    </p>
-                  )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-emerald-400/10 bg-emerald-500/10 px-3 py-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-200/80">Marked</p>
+                    <p className="mt-2 text-3xl font-semibold text-white">{presentCount}</p>
+                    <p className="mt-1 text-sm text-emerald-100/80">Saved to the teacher report</p>
+                  </div>
+                  <div className="rounded-2xl border border-cyan-400/10 bg-cyan-500/10 px-3 py-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">Latest</p>
+                    {lastMarked ? (
+                      <>
+                        <p className="mt-2 truncate text-lg font-semibold text-white">{lastMarked.name || 'Unknown'}</p>
+                        <p className="mt-1 text-sm text-cyan-100/80">
+                          {lastMarked.rollNumber ? `Roll ${lastMarked.rollNumber}` : 'Roll not available'}
+                        </p>
+                        <p className="mt-1 text-sm text-cyan-100/70">
+                          {lastMarked.time ? `At ${lastMarked.time}` : 'Just now'}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-2 text-sm text-cyan-100/80">No student has been marked in this session yet.</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -356,7 +398,7 @@ export default function LiveCCTV() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Roster source</p>
                 <p className="mt-2 text-sm font-medium text-white">{students.length} students in roster</p>
                 <p className="mt-1 text-sm text-slate-300">
-                  Add student records in Students so the roster stays in sync with the backend.
+                  Add student records in Students and the backend will use those exact entries for recognition.
                 </p>
               </div>
 
@@ -377,7 +419,7 @@ export default function LiveCCTV() {
                     ))
                   ) : (
                     <p className="rounded-2xl border border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-300">
-                      Student records will appear here after syncing from the Smart Attendance Hub roster.
+                      Student records will appear here after syncing from the Attenzo roster.
                     </p>
                   )}
                 </div>
