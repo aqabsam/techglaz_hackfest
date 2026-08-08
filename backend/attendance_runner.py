@@ -23,8 +23,14 @@ EXCEL_FILE = os.environ.get('ATTENDANCE_EXPORT_FILE', DEFAULT_EXCEL_FILE)
 REPORT_TITLE = os.environ.get('ATTENDANCE_REPORT_TITLE', 'Attenzo Attendance Report')
 STUDENTS_API_URL = os.environ.get('ATTENDANCE_STUDENTS_API_URL', 'http://localhost:5000/api/students')
 API_BASE_URL = os.environ.get('ATTENDANCE_API_BASE_URL') or STUDENTS_API_URL.rsplit('/api/students', 1)[0]
+RUNTIME_DIR = os.environ.get('ATTENDANCE_RUNTIME_DIR', os.path.join(BASE_DIR, 'runtime'))
+FRAME_FILE = os.environ.get('ATTENDANCE_FRAME_FILE') or os.path.join(RUNTIME_DIR, 'attendance_frame.jpg')
 STOP_REQUESTED = False
 ACTIVE_STUDENTS = []
+SHOW_WINDOW = os.environ.get('ATTENDANCE_SHOW_WINDOW', '0').lower() in {'1', 'true', 'yes', 'on'}
+USE_LOCAL_FILES = os.environ.get('ATTENDANCE_USE_LOCAL_FILES', '1').lower() in {'1', 'true', 'yes', 'on'}
+
+os.makedirs(RUNTIME_DIR, exist_ok=True)
 
 
 hidden_name_fragments = ['mohd aqab sami', 'mohd aqabsami', 'aban shami']
@@ -278,6 +284,19 @@ def handle_stop_signal(signum, frame):
     STOP_REQUESTED = True
 
 
+def publish_frame(frame):
+    temp_file = f'{FRAME_FILE}.tmp.jpg'
+    try:
+        if cv2.imwrite(temp_file, frame):
+            os.replace(temp_file, FRAME_FILE)
+    except Exception:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except Exception:
+            pass
+
+
 signal.signal(signal.SIGTERM, handle_stop_signal)
 signal.signal(signal.SIGINT, handle_stop_signal)
 
@@ -323,16 +342,25 @@ def fetch_image_bytes(photo_url):
         except Exception:
             raise ValueError('Invalid data URL for student photo')
 
+    if os.path.exists(photo_url):
+        with open(photo_url, 'rb') as handle:
+            return handle.read()
+
     with urllib.request.urlopen(photo_url, timeout=10) as response:
         return response.read()
 
 
 def student_photo_source(student):
+    photo_filename = student.get('photoFilename') or ''
+    if photo_filename and USE_LOCAL_FILES:
+        local_path = os.path.join(BASE_DIR, 'KnownFaces', photo_filename)
+        if os.path.exists(local_path):
+            return local_path
+
     photo_url = student.get('photoUrl') or ''
     if photo_url:
         return photo_url
 
-    photo_filename = student.get('photoFilename') or ''
     if photo_filename:
         return f'{API_BASE_URL}/api/student-photo/{photo_filename}'
 
@@ -359,7 +387,8 @@ def build_face_database(students):
             continue
 
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        encodings = face_recognition.face_encodings(rgb_image)
+        face_locations = face_recognition.face_locations(rgb_image, model='hog')
+        encodings = face_recognition.face_encodings(rgb_image, face_locations, model='small')
         if not encodings:
             continue
 
@@ -444,8 +473,8 @@ def main():
             small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
             rgb_small = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-            face_locations = face_recognition.face_locations(rgb_small)
-            face_encodings = face_recognition.face_encodings(rgb_small, face_locations)
+            face_locations = face_recognition.face_locations(rgb_small, model='hog')
+            face_encodings = face_recognition.face_encodings(rgb_small, face_locations, model='small')
 
             for face_encoding, face_location in zip(face_encodings, face_locations):
                 matches = face_recognition.compare_faces(known_encodings, face_encoding)
@@ -516,10 +545,15 @@ def main():
             for index, student_name in enumerate(absent_students[:8], start=1):
                 cv2.putText(frame, student_name, (x_offset, y_offset + index * 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (248, 113, 113), 2)
 
-            cv2.imshow("CCTV Attendance", frame)
+            publish_frame(frame)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            if SHOW_WINDOW:
+                cv2.imshow("CCTV Attendance", frame)
+
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                time.sleep(0.02)
     finally:
         if os.path.exists(EXCEL_FILE):
             try:

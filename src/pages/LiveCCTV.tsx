@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Camera, Download, Monitor, Play, Square, Smartphone, Users, Wifi, WifiOff, CircleAlert } from 'lucide-react';
 import Modal from '../components/auth/common/Modal';
-import { getAttendanceExcelUrl, getAttendanceStatus, startAttendance, stopAttendance } from '../services/api';
+import { getAttendanceExcelUrl, getAttendanceFeedUrl, getAttendanceStatus, startAttendance, stopAttendance } from '../services/api';
 import { filterVisibleNames } from '../lib/sitePrivacy';
 import { loadMergedStudentRoster } from '../lib/studentRoster';
 import type { Student } from '../types';
@@ -20,10 +20,7 @@ export default function LiveCCTV() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [showStopDialog, setShowStopDialog] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const delay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+  const feedUrl = getAttendanceFeedUrl();
 
   useEffect(() => {
     const loadRoster = async () => {
@@ -39,54 +36,6 @@ export default function LiveCCTV() {
 
     loadRoster();
   }, []);
-
-  useEffect(() => {
-    const stopPreview = () => {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-    };
-
-    if (mode !== 'webcam') {
-      stopPreview();
-      return undefined;
-    }
-
-    let cancelled = false;
-
-    const startPreview = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'user' },
-          },
-          audio: false,
-        });
-
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => undefined);
-        }
-      } catch {
-        setError('Front camera preview could not start. Check camera permissions in your browser.');
-      }
-    };
-
-    startPreview();
-
-    return () => {
-      cancelled = true;
-      stopPreview();
-    };
-  }, [mode]);
 
   useEffect(() => {
     const timer = window.setInterval(async () => {
@@ -106,7 +55,7 @@ export default function LiveCCTV() {
       } catch {
         // ignore live polling failures
       }
-    }, 3000);
+    }, 6000);
 
     return () => window.clearInterval(timer);
   }, [isRunning]);
@@ -126,9 +75,8 @@ export default function LiveCCTV() {
       try {
       const result = await startAttendance(mode || 'webcam', source);
       setMessage(result.message || 'Attendance started');
-      await delay(1500);
-      const status = await getAttendanceStatus();
 
+      const status = await getAttendanceStatus();
       if (!status.running) {
         setIsRunning(false);
         setError(status.message || result.message || 'Live attendance is unavailable right now.');
@@ -180,14 +128,14 @@ export default function LiveCCTV() {
             </div>
             <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">Live CCTV Attendance</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              Use the front webcam preview to confirm your device camera. Live recognition and export controls are handled by the backend service.
+              Start attendance to show the Python camera feed here. Live recognition and export controls are handled by the backend service.
             </p>
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-slate-950/55 px-5 py-4 text-white backdrop-blur-xl">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Mode</p>
             <p className="mt-2 text-lg font-semibold">{currentModeLabel || 'Not selected'}</p>
-            <p className="text-sm text-slate-400">Backend-connected preview</p>
+            <p className="text-sm text-slate-400">Python camera feed</p>
           </div>
         </div>
       </div>
@@ -259,7 +207,7 @@ export default function LiveCCTV() {
           </h3>
           <p className="mt-2 text-sm text-slate-300">
                   {mode === 'webcam'
-              ? 'The browser preview shows your front camera only. Attendance processing is delegated to the backend.'
+              ? 'The backend will open your device webcam and show the processed feed on this page.'
               : 'Paste the live stream address and start attendance.'}
           </p>
 
@@ -285,7 +233,7 @@ export default function LiveCCTV() {
                   className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Play className="h-5 w-5" />
-                  {loading ? 'Starting...' : mode === 'webcam' ? 'Preview Camera' : 'Start Attendance'}
+                  {loading ? 'Starting...' : 'Start Attendance'}
                 </button>
             <button
               onClick={() => setMode(null)}
@@ -339,27 +287,25 @@ export default function LiveCCTV() {
           <div className="grid gap-6 lg:grid-cols-[1.5fr_0.9fr]">
           <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-3 shadow-2xl shadow-slate-900/20 sm:p-4">
               <div className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.2),_rgba(15,23,42,1)_60%)]">
-                {mode === 'webcam' ? (
+                {isRunning ? (
                   <>
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      muted
-                      playsInline
+                    <img
+                      src={feedUrl}
+                      alt="Live attendance feed from the Python backend"
                       className="aspect-video h-full w-full object-cover"
                     />
                     <div className="absolute left-4 top-4 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/10">
-                      Front camera preview
+                      Python feed
                     </div>
                     <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-200 backdrop-blur">
-                      Front camera is visible here so you can confirm permissions and framing before starting attendance processing.
+                      The backend is processing the camera and sending the live feed to this page.
                     </div>
                   </>
                 ) : (
                   <div className="flex aspect-video items-center justify-center">
                     <div className="text-center">
                       <Camera className="mx-auto h-16 w-16 text-cyan-300/80" />
-                      <p className="mt-4 text-sm text-slate-200">Camera feed preview is available only for the local webcam</p>
+                      <p className="mt-4 text-sm text-slate-200">Start attendance to show the Python camera feed here</p>
                       <p className="mt-2 text-xs text-slate-400">Recognition uses only the students stored in your roster</p>
                     </div>
                   </div>
@@ -431,7 +377,7 @@ export default function LiveCCTV() {
                     ))
                   ) : (
                     <p className="rounded-2xl border border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-300">
-                      Student records will appear here after syncing from the TechGlaz Fest roster.
+                      Student records will appear here after syncing from the Smart Attendance Hub roster.
                     </p>
                   )}
                 </div>

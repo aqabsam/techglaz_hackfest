@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, Response, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -56,11 +57,14 @@ EXPORT_DIR = os.environ.get('ATTENDANCE_EXPORT_DIR', os.path.join(BASE_DIR, 'exp
 os.makedirs(EXPORT_DIR, exist_ok=True)
 EXCEL_FILE = os.environ.get('ATTENDANCE_EXPORT_FILE') or os.path.join(EXPORT_DIR, 'Attendance.xlsx')
 ATTENDANCE_SCRIPT = os.path.join(BASE_DIR, 'attendance_runner.py')
+ATTENDANCE_RUNTIME_DIR = os.path.join(BASE_DIR, 'runtime')
+ATTENDANCE_FRAME_FILE = os.path.join(ATTENDANCE_RUNTIME_DIR, 'attendance_frame.jpg')
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = int(os.environ.get('PORT', '5000'))
 USE_FIREBASE = os.environ.get('USE_FIREBASE', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 os.makedirs(STUDENT_PHOTO_DIR, exist_ok=True)
+os.makedirs(ATTENDANCE_RUNTIME_DIR, exist_ok=True)
 
 attendance_process = None
 attendance_last_error = ''
@@ -93,6 +97,49 @@ load_env_file(os.path.join(os.path.dirname(BASE_DIR), '.env.local'))
 
 FIREBASE_DATABASE_URL = os.environ.get('FIREBASE_DATABASE_URL') or os.environ.get('VITE_FIREBASE_DATABASE_URL') or 'https://attenzo-web-default-rtdb.firebaseio.com'
 current_excel_file = EXCEL_FILE
+
+
+def clear_latest_frame():
+    try:
+        if os.path.exists(ATTENDANCE_FRAME_FILE):
+            os.remove(ATTENDANCE_FRAME_FILE)
+    except Exception:
+        pass
+
+
+def stream_latest_frame():
+    boundary = b'--frame'
+    last_frame_mtime = 0.0
+
+    while attendance_process and attendance_process.poll() is None:
+        if not os.path.exists(ATTENDANCE_FRAME_FILE):
+            time.sleep(0.1)
+            continue
+
+        try:
+            mtime = os.path.getmtime(ATTENDANCE_FRAME_FILE)
+            if mtime <= last_frame_mtime:
+                time.sleep(0.08)
+                continue
+
+            last_frame_mtime = mtime
+            with open(ATTENDANCE_FRAME_FILE, 'rb') as file:
+                frame = file.read()
+
+            if not frame:
+                time.sleep(0.08)
+                continue
+
+            yield (
+                boundary + b'\r\n'
+                b'Content-Type: image/jpeg\r\n'
+                b'Cache-Control: no-cache, no-store, must-revalidate\r\n\r\n' + frame + b'\r\n'
+            )
+            time.sleep(0.08)
+        except Exception:
+            time.sleep(0.1)
+
+    yield b''
 
 
 hidden_name_fragments = ['mohd aqab sami', 'mohd aqabsami', 'aban shami']
@@ -713,6 +760,7 @@ def start_attendance():
             return jsonify({'error': attendance_last_error}), 400
 
         current_excel_file = create_session_excel_file()
+        clear_latest_frame()
         if mode == 'webcam':
             source = '0'
         elif not source:
@@ -723,6 +771,8 @@ def start_attendance():
         env['ATTENDANCE_REPORT_TITLE'] = 'Attenzo Attendance Report'
         env['ATTENDANCE_SHOW_WINDOW'] = '0'
         env['ATTENDANCE_USE_LOCAL_FILES'] = '1'
+        env['ATTENDANCE_RUNTIME_DIR'] = ATTENDANCE_RUNTIME_DIR
+        env['ATTENDANCE_FRAME_FILE'] = ATTENDANCE_FRAME_FILE
         env['ATTENDANCE_SESSION_ROLLS'] = ','.join(
             [str(student.get('rollNumber', '')).strip() for student in students if student.get('rollNumber')]
         )
@@ -772,6 +822,7 @@ def stop_attendance():
                 attendance_process.kill()
         attendance_process = None
         attendance_last_error = ''
+        clear_latest_frame()
         return jsonify({
             'success': True,
             'message': 'Attendance stopped',
@@ -780,6 +831,7 @@ def stop_attendance():
 
     attendance_process = None
     attendance_last_error = ''
+    clear_latest_frame()
     return jsonify({'error': 'No attendance process running'}), 400
 
 
@@ -817,6 +869,23 @@ def attendance_status():
         'absent': absent,
         'message': '' if running else attendance_last_error,
     })
+
+
+@app.route('/api/attendance/feed')
+def attendance_feed():
+    running = attendance_process is not None and attendance_process.poll() is None
+    if not running:
+        return jsonify({'error': 'No attendance process running'}), 400
+
+    return Response(
+        stream_latest_frame(),
+        mimetype='multipart/x-mixed-replace; boundary=frame',
+        headers={
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        },
+    )
 
 
 @app.route('/api/attendance/settings', methods=['GET'])

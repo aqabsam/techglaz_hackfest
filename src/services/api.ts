@@ -77,14 +77,17 @@ type AttendanceStartResult = {
 
 // Attendance API
 export async function startAttendance(mode: 'webcam' | 'ip_camera' | 'cctv', source?: string): Promise<AttendanceStartResult> {
+  const payload: Record<string, string> & { mode: 'webcam' | 'ip_camera' | 'cctv' } = { mode };
+
+  if (mode !== 'webcam' && source) {
+    payload.source = source;
+    payload.ipAddress = source;
+  }
+
   return requestJson<AttendanceStartResult>('/attendance/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      mode,
-      source,
-      ipAddress: source,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -125,6 +128,10 @@ export async function markAttendanceDay(date: string, status: 'Holiday' | 'Sunda
 
 export function getAttendanceExcelUrl(): string {
   return withApiOrigin('/api/reports/excel');
+}
+
+export function getAttendanceFeedUrl(): string {
+  return withApiOrigin('/api/attendance/feed');
 }
 
 // Dashboard API
